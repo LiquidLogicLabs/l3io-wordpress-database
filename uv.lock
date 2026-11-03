@@ -400,13 +400,13 @@ wheels = [
 
 [[package]]
 name = "l3io-age-passphrase"
-version = "0.1.0"
-source = { git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.0#ca083fe225291ff7aa83deddcf5b6b3d099c6960" }
+version = "0.1.1"
+source = { git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.1#4322c4ba466ed06a3fb1905f1fbae5dba2d79f62" }
 
 [[package]]
 name = "l3io-wordpress-config"
-version = "0.1.0"
-source = { git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git?tag=v0.1.0#9abeeb87314609bfa8a7e50fab60440268a0935a" }
+version = "0.1.3"
+source = { git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git?tag=v0.1.3#c2d19b45719b3cf1a7687c0fca0b3a9bb70a5869" }
 
 [[package]]
 name = "l3io-wordpress-database"
@@ -449,8 +449,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 'aws'", specifier = ">=1.34,<2" },
-    { name = "l3io-age-passphrase", marker = "extra == 'encryption'", git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.0" },
-    { name = "l3io-wordpress-config", marker = "extra == 'wpconfig'", git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git?tag=v0.1.0" },
+    { name = "l3io-age-passphrase", marker = "extra == 'encryption'", git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.1" },
+    { name = "l3io-wordpress-config", marker = "extra == 'wpconfig'", git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git?tag=v0.1.3" },
     { name = "opentelemetry-api", specifier = ">=1.30,<2" },
     { name = "pymysql", extras = ["rsa"], specifier = ">=1.2,<2" },
     { name = "pyrage", marker = "extra == 'encryption'", specifier = ">=1.4,<2" },
@@ -461,8 +461,8 @@ provides-extras = ["aws", "encryption", "wpconfig"]
 [package.metadata.requires-dev]
 dev = [
     { name = "boto3", specifier = ">=1.34,<2" },
-    { name = "l3io-age-passphrase", git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.0" },
-    { name = "l3io-wordpress-config", git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git?tag=v0.1.0" },
+    { name = "l3io-age-passphrase", git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.1" },
+    { name = "l3io-wordpress-config", git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git?tag=v0.1.3" },
     { name = "mypy", specifier = "==2.3.1" },
     { name = "opentelemetry-sdk", specifier = "==1.45.1" },
     { name = "packaging", specifier = "==26.3" },
