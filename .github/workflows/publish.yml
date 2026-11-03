@@ -59,8 +59,10 @@ jobs:
         id: check
         env:
           MIRROR_URL: ${{ vars.PYPI_CUSTOM_URL }}
-          MIRROR_USER: ${{ secrets.PYPI_CUSTOM_USERNAME }}
-          MIRROR_TOKEN: ${{ secrets.PYPI_CUSTOM_PASSWORD }}
+          MIRROR_USER: ${{ vars.GITEA_USERNAME || github.actor }}
+          # GITEA_TOKEN, not PYPI_CUSTOM_PASSWORD: Infisical/GH copies of that
+          # pair have been observed 401 against Gitea while GITEA_TOKEN works.
+          MIRROR_TOKEN: ${{ secrets.GITEA_TOKEN }}
         run: |
           set -euo pipefail
           if [ -n "${MIRROR_URL}" ] && [ -n "${MIRROR_USER}" ] && [ -n "${MIRROR_TOKEN}" ]; then
@@ -361,8 +363,10 @@ jobs:
         id: exists
         env:
           MIRROR_URL: ${{ vars.PYPI_CUSTOM_URL }}
-          MIRROR_USER: ${{ secrets.PYPI_CUSTOM_USERNAME }}
-          MIRROR_TOKEN: ${{ secrets.PYPI_CUSTOM_PASSWORD }}
+          MIRROR_USER: ${{ vars.GITEA_USERNAME || github.actor }}
+          # GITEA_TOKEN, not PYPI_CUSTOM_PASSWORD: Infisical/GH copies of that
+          # pair have been observed 401 against Gitea while GITEA_TOKEN works.
+          MIRROR_TOKEN: ${{ secrets.GITEA_TOKEN }}
         run: |
           set -euo pipefail
           # Exactly one wheel, asserted rather than assumed. `ls dist/*.whl`
@@ -400,8 +404,8 @@ jobs:
         if: steps.exists.outputs.already_published != 'true'
         env:
           UV_PUBLISH_URL: ${{ vars.PYPI_CUSTOM_URL }}
-          UV_PUBLISH_USERNAME: ${{ secrets.PYPI_CUSTOM_USERNAME }}
-          UV_PUBLISH_PASSWORD: ${{ secrets.PYPI_CUSTOM_PASSWORD }}
+          UV_PUBLISH_USERNAME: ${{ vars.GITEA_USERNAME || github.actor }}
+          UV_PUBLISH_PASSWORD: ${{ secrets.GITEA_TOKEN }}
         run: uv publish dist/*
 
   release:
