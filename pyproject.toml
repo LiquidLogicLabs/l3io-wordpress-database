@@ -60,18 +60,18 @@ required-version = "==0.11.6"
 # metadata makes the package unresolvable from PyPI. `uv build --no-sources`
 # strips it, and tools/check_dist_metadata.py fails a build that carries one.
 # Delete this block once l3io-wordpress-config is on PyPI.
-l3io-wordpress-config = { git = "https://github.com/ravensorb/l3io-wordpress-config.git", tag = "v0.1.0" }
+l3io-wordpress-config = { git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git", tag = "v0.1.0" }
 # Sibling binder: GitHub Releases only (not on PyPI yet). Strip before
 # publish (`uv build --no-sources` / check_dist_metadata). Prefer a direct
 # wheel URL in Docker images; this git tag keeps local `uv sync` working.
-l3io-age-passphrase = { git = "https://github.com/ravensorb/l3io-age-passphrase.git", tag = "v0.1.0" }
+l3io-age-passphrase = { git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git", tag = "v0.1.0" }
 
 [project.scripts]
 l3io-wordpress-database = "l3io.wp.database.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ravensorb/l3io-wordpress-database"
-Source = "https://github.com/ravensorb/l3io-wordpress-database"
+Homepage = "https://github.com/LiquidLogicLabs/l3io-wordpress-database"
+Source = "https://github.com/LiquidLogicLabs/l3io-wordpress-database"
 
 [dependency-groups]
 dev = [

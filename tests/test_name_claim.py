@@ -18,7 +18,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
-OURS = "https://github.com/ravensorb/l3io-wordpress-database"
+OURS = "https://github.com/LiquidLogicLabs/l3io-wordpress-database"
 
 
 def _load() -> ModuleType:

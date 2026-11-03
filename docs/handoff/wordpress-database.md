@@ -105,7 +105,7 @@ and the official age tarball (includes the plugin). See ADR-0003.
 
 **Status:** dual-backend landed; **released as v0.2.0** (2026-10-27 GitHub
 Release + Gitea mirror; not PyPI). Binder:
-https://github.com/ravensorb/l3io-age-passphrase/releases/tag/v0.1.0.
+https://github.com/LiquidLogicLabs/l3io-age-passphrase/releases/tag/v0.1.0.
 Dev pin still git-tags the binder; strip before a PyPI publish.
 
 **For backup:** pin `l3io-wordpress-database[encryption]>=0.2.0,<0.3` (or the

@@ -62,7 +62,7 @@ TRANSFER_PORT ?= 33399
 # Prebuilt abi3 wheel for l3io-age-passphrase (server images have no C compiler).
 BINDER_WHEEL_DIR ?= $(CURDIR)/.cache/age-passphrase-wheels
 BINDER_VERSION ?= 0.1.0
-BINDER_WHEEL_URL ?= https://github.com/ravensorb/l3io-age-passphrase/releases/download/v$(BINDER_VERSION)/l3io_age_passphrase-$(BINDER_VERSION)-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+BINDER_WHEEL_URL ?= https://github.com/LiquidLogicLabs/l3io-age-passphrase/releases/download/v$(BINDER_VERSION)/l3io_age_passphrase-$(BINDER_VERSION)-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
 test-transfer: ## Export/import tests against ENGINE (a server image) using its own client tools
 	@test -n "$(ENGINE)" || { echo "set ENGINE, e.g. make test-transfer ENGINE=mysql:8.4"; exit 1; }

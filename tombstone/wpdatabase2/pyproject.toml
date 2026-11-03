@@ -17,7 +17,7 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/ravensorb/l3io-wordpress-database"
+Homepage = "https://github.com/LiquidLogicLabs/l3io-wordpress-database"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wpdatabase2"]

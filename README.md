@@ -10,7 +10,7 @@ It imports as `l3io.wp.database`, in the `l3io.wp` namespace shared with
 
 > **Status:** 0.x — documented and typed, with no stability promise until 1.0.0.
 > Not yet on PyPI; releases are on
-> [GitHub](https://github.com/ravensorb/l3io-wordpress-database/releases).
+> [GitHub](https://github.com/LiquidLogicLabs/l3io-wordpress-database/releases).
 
 ## Installing
 

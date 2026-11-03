@@ -10,7 +10,7 @@ set -euo pipefail
 
 wheel=${1:?usage: verify_extras.sh WHEEL [PYTHON]}
 python=${2:-}
-config_wheel=${WPCONFIG_WHEEL:-https://github.com/ravensorb/l3io-wordpress-config/releases/download/v0.1.0/l3io_wordpress_config-0.1.0-py3-none-any.whl}
+config_wheel=${WPCONFIG_WHEEL:-https://github.com/LiquidLogicLabs/l3io-wordpress-config/releases/download/v0.1.0/l3io_wordpress_config-0.1.0-py3-none-any.whl}
 pkg_url="file://$(realpath "$wheel")"
 
 isolated() {
@@ -27,7 +27,7 @@ if [ -z "$binder_wheel" ]; then
   binder_wheel=$(ls "$cache"/l3io_age_passphrase-*.whl 2>/dev/null | head -1 || true)
   if [ -z "$binder_wheel" ]; then
     ver=${BINDER_VERSION:-0.1.0}
-    binder_download=${BINDER_WHEEL_URL:-https://github.com/ravensorb/l3io-age-passphrase/releases/download/v${ver}/l3io_age_passphrase-${ver}-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl}
+    binder_download=${BINDER_WHEEL_URL:-https://github.com/LiquidLogicLabs/l3io-age-passphrase/releases/download/v${ver}/l3io_age_passphrase-${ver}-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl}
     curl -fsSL -o "$cache/$(basename "$binder_download")" "$binder_download"
     binder_wheel=$(ls "$cache"/l3io_age_passphrase-*.whl | head -1)
   fi
