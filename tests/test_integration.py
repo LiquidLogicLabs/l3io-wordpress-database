@@ -163,6 +163,7 @@ def test_survey_of_an_absent_database(suffix: str) -> None:
     result = survey(Connection(host=HOST, port=PORT, database=f"wp_{suffix}"), new_admin())
     assert result.database_exists is False
     assert result.table_count == 0
+    assert result.routine_count == 0 and result.event_count == 0
     assert result.is_wordpress is False
     assert result.server.family in (ServerFamily.MYSQL, ServerFamily.MARIADB)
 
@@ -183,9 +184,27 @@ def test_survey_of_a_wordpress_database(suffix: str) -> None:
         table_prefix="xy_",
     )
     assert result.database_exists and result.table_count == 1 and result.is_wordpress
+    assert result.routine_count == 0 and result.event_count == 0
     assert result.schema_version is not None and result.schema_version.release == "6.7"
     assert result.user_exists is True
     assert result.user_privileges == frozenset({"SELECT"})
+
+
+def test_survey_counts_views_routines_and_events(suffix: str) -> None:
+    name = f"wp_{suffix}"
+    admin_sql(
+        f"CREATE DATABASE `{name}`",
+        f"CREATE TABLE `{name}`.`t` (id INT)",
+        f"CREATE VIEW `{name}`.`v` AS SELECT id FROM `{name}`.`t`",  # noqa: S608 - test fixture
+        (f"CREATE PROCEDURE `{name}`.`p`() BEGIN SELECT 1; END"),
+        f"CREATE FUNCTION `{name}`.`f`() RETURNS INT DETERMINISTIC RETURN 1",
+        f"CREATE EVENT `{name}`.`e` ON SCHEDULE EVERY 1 DAY DO INSERT INTO `{name}`.`t` VALUES (1)",  # noqa: S608
+    )
+    result = survey(Connection(host=HOST, port=PORT, database=name), new_admin())
+    assert result.database_exists
+    assert result.table_count == 2  # base table + view
+    assert result.routine_count == 2  # procedure + function
+    assert result.event_count == 1
 
 
 def test_schema_version_with_custom_prefix_via_new_api(suffix: str) -> None:

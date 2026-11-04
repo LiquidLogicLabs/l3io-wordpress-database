@@ -201,7 +201,8 @@ package pins it. Still open on config's side: reaching PyPI.
 - An unknown `--log-level` silently becomes INFO.
 - `tests/test_facade.py` lists operations by hand.
 - Survey: validates the user name after connecting; a non-integer `db_version` raises
-  `AccessDeniedError` and aborts survey; `table_count` counts views.
+  `AccessDeniedError` and aborts survey; `table_count` counts views (base tables +
+  views); `routine_count` / `event_count` cover procedures, functions, and events.
 - Observability: a refusal marks the span ERROR while the log says "refused";
   `set_tracer_provider` at test-module import; `except BaseException` labels interrupts
   "failed".

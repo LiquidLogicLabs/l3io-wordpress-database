@@ -40,7 +40,13 @@ from .versions import SchemaVersion
 
 @dataclass(frozen=True, slots=True)
 class Survey:
-    """What the administrator can see about one database."""
+    """What the administrator can see about one database.
+
+    ``table_count`` is every row in ``information_schema.TABLES`` for the
+    schema, so base tables and views both count. Routines and events are
+    separate: they are not tables, and a database that holds only them still
+    reports ``table_count == 0``.
+    """
 
     server: ServerInfo
     database_exists: bool
@@ -50,6 +56,8 @@ class Survey:
     schema_version: SchemaVersion | None
     user_exists: bool | None
     user_privileges: frozenset[str] | None
+    routine_count: int = 0
+    event_count: int = 0
 
 
 def _resolve(source: CredentialSource) -> ResolvedCredentials:
@@ -140,6 +148,16 @@ def survey(
                 )
                 table_count, size_bytes = (int(v) for v in cur.fetchone())
                 cur.execute(
+                    "SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = %s",
+                    (database,),
+                )
+                routine_count = int(cur.fetchone()[0])
+                cur.execute(
+                    "SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA = %s",
+                    (database,),
+                )
+                event_count = int(cur.fetchone()[0])
+                cur.execute(
                     "SELECT COUNT(*) FROM information_schema.TABLES "
                     "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
                     (database, f"{table_prefix}options"),
@@ -170,7 +188,13 @@ def survey(
                     user_privileges = frozenset(str(r[0]) for r in cur.fetchall())
         except pymysql.err.MySQLError as exc:
             raise _as_package_error(exc) from exc
-        fields.update(database_exists=exists, table_count=table_count, is_wordpress=is_wordpress)
+        fields.update(
+            database_exists=exists,
+            table_count=table_count,
+            routine_count=routine_count,
+            event_count=event_count,
+            is_wordpress=is_wordpress,
+        )
         return Survey(
             server,
             exists,
@@ -180,6 +204,8 @@ def survey(
             version,
             user_exists,
             user_privileges,
+            routine_count,
+            event_count,
         )
 
 

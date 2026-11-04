@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+from dataclasses import fields
+
 import pytest
 
 from l3io.wp.database.connection import Connection
 from l3io.wp.database.credentials import Explicit
 from l3io.wp.database.errors import DatabaseUnreachableError
-from l3io.wp.database.inspection import inspect, survey
+from l3io.wp.database.inspection import Survey, inspect, survey
 from l3io.wp.database.state import ConnectionState
+
+
+def test_survey_counts_views_separately_from_routines_and_events() -> None:
+    """table_count includes views; routines and events are their own fields."""
+    names = {f.name for f in fields(Survey)}
+    assert {"table_count", "routine_count", "event_count"} <= names
+    assert "views" in (Survey.__doc__ or "").lower()
 
 
 def test_unreachable_server_is_a_state_not_an_exception() -> None:
