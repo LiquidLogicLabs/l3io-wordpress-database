@@ -8,6 +8,8 @@ from .connection import Connection
 from .credentials import ResolvedCredentials
 from .state import ConnectionState
 
+# BaseException is used by classify so SSLError (not a MySQLError) maps to TLS_FAILED.
+
 CONNECT_TIMEOUT_SECONDS = 10
 
 ER_DBACCESS_DENIED = 1044
@@ -22,6 +24,9 @@ def open_connection(
     connection: Connection, credentials: ResolvedCredentials, *, database: str | None
 ) -> pymysql.connections.Connection:
     """Open a connection. Credentials are call arguments, never a URI."""
+    from .tls import pymysql_ssl
+
+    ssl_ctx = pymysql_ssl(connection.tls)
     return pymysql.connect(
         host=connection.host,
         port=connection.port,
@@ -30,6 +35,7 @@ def open_connection(
         database=database,
         connect_timeout=CONNECT_TIMEOUT_SECONDS,
         autocommit=False,
+        ssl=ssl_ctx,
     )
 
 
@@ -39,15 +45,20 @@ def error_code(exc: pymysql.err.MySQLError) -> int | None:
     return code if isinstance(code, int) else None
 
 
-def classify(exc: pymysql.err.MySQLError) -> ConnectionState:
+def classify(exc: BaseException) -> ConnectionState:
     """Map a connection failure onto a :class:`ConnectionState`."""
-    code = error_code(exc)
-    if code == ER_ACCESS_DENIED:
-        return ConnectionState.AUTHENTICATION_FAILED
-    if code == ER_DBACCESS_DENIED:
-        return ConnectionState.ACCESS_DENIED
-    if code == ER_BAD_DB:
-        return ConnectionState.DATABASE_ABSENT
+    from .tls import is_tls_failure
+
+    if is_tls_failure(exc):
+        return ConnectionState.TLS_FAILED
+    if isinstance(exc, pymysql.err.MySQLError):
+        code = error_code(exc)
+        if code == ER_ACCESS_DENIED:
+            return ConnectionState.AUTHENTICATION_FAILED
+        if code == ER_DBACCESS_DENIED:
+            return ConnectionState.ACCESS_DENIED
+        if code == ER_BAD_DB:
+            return ConnectionState.DATABASE_ABSENT
     return ConnectionState.UNREACHABLE
 
 

@@ -35,6 +35,9 @@ class ConnectionState(StrEnum):
     UNREACHABLE = "unreachable"
     """The server could not be reached."""
 
+    TLS_FAILED = "tls_failed"
+    """The server was contacted but TLS was required and failed."""
+
     CREDENTIALS_UNOBTAINABLE = "credentials_unobtainable"
     """Credentials could not be obtained, so nothing was attempted."""
 
@@ -70,5 +73,6 @@ class ConnectionState(StrEnum):
         """
         return self in {
             ConnectionState.UNREACHABLE,
+            ConnectionState.TLS_FAILED,
             ConnectionState.CREDENTIALS_UNOBTAINABLE,
         }

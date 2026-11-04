@@ -60,12 +60,27 @@ def _connect_or_raise(
     connection: Connection, credentials: ResolvedCredentials, database: str | None
 ) -> Any:
     """Open a session, or raise a package error saying why it could not be."""
+    from .errors import TlsHandshakeError, TlsVerificationError
+    from .tls import is_tls_failure, is_verification_failure
+
     try:
         return open_connection(connection, credentials, database=database)
-    except pymysql.err.MySQLError as exc:
-        if classify(exc) is ConnectionState.AUTHENTICATION_FAILED:
+    except Exception as exc:  # noqa: BLE001 - SSLError and driver errors both map here
+        if (
+            isinstance(exc, pymysql.err.MySQLError)
+            and classify(exc) is ConnectionState.AUTHENTICATION_FAILED
+        ):
             msg = f"the account {credentials.username!r} was rejected"
             raise AuthenticationFailedError(msg) from exc
+        if is_verification_failure(exc):
+            msg = f"{connection.host}:{connection.port} presented a certificate that did not verify"
+            raise TlsVerificationError(msg) from exc
+        if is_tls_failure(exc) or classify(exc) is ConnectionState.TLS_FAILED:
+            msg = (
+                f"{connection.host}:{connection.port} did not complete a TLS "
+                "handshake (TLS was required)"
+            )
+            raise TlsHandshakeError(msg) from exc
         msg = f"{connection.host}:{connection.port} could not be reached"
         raise DatabaseUnreachableError(msg) from exc
 
@@ -183,7 +198,7 @@ def inspect(connection: Connection, credentials: CredentialSource) -> Connection
             return ConnectionState.CREDENTIALS_UNOBTAINABLE
         try:
             session = open_connection(connection, resolved, database=connection.database)
-        except pymysql.err.MySQLError as exc:
+        except Exception as exc:  # noqa: BLE001 - SSLError and driver errors both map here
             state = classify(exc)
         else:
             session.close()

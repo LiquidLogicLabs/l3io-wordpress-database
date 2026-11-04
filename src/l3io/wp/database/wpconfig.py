@@ -44,8 +44,8 @@ DEFAULT_TABLE_PREFIX = "wp_"
 #: truncates a quoted value containing ``);``, and ``ensure`` would then set the
 #: account's password to the truncated value. Only an install through the extra
 #: enforces the range, so it is checked again here.
-REQUIRED_CONFIG = ">=0.1.0,<0.2"
-_CONFIG_FLOOR, _CONFIG_CEILING = (0, 1, 0), (0, 2, 0)
+REQUIRED_CONFIG = ">=0.1.2,<0.2"
+_CONFIG_FLOOR, _CONFIG_CEILING = (0, 1, 2), (0, 2, 0)
 
 
 def _accepts(version: str) -> bool:

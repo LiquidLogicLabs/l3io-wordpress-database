@@ -192,11 +192,18 @@ def _preflight_resolved(
     verdict = Verdict(operation_name)
     try:
         session = open_connection(connection, resolved, database=None)
-    except pymysql.err.MySQLError as exc:
-        if classify(exc) is ConnectionState.AUTHENTICATION_FAILED:
+    except Exception as exc:  # noqa: BLE001 - SSLError and driver errors both map here
+        state = classify(exc)
+        if state is ConnectionState.AUTHENTICATION_FAILED:
             finding = Finding(
                 Code.AUTHENTICATION_FAILED,
                 f"the administrator account {resolved.username!r} was rejected",
+            )
+        elif state is ConnectionState.TLS_FAILED:
+            finding = Finding(
+                Code.UNREACHABLE,
+                f"{connection.host}:{connection.port} TLS failed",
+                {"host": connection.host, "port": connection.port, "cause": "tls"},
             )
         else:
             finding = Finding(

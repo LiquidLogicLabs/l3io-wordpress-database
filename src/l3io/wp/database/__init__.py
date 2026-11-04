@@ -48,6 +48,8 @@ from .errors import (
     ProvisioningError,
     RefusedError,
     RegionNotKnownError,
+    TlsHandshakeError,
+    TlsVerificationError,
     TransferError,
 )
 from .facade import Database
@@ -74,6 +76,12 @@ from .provision import (
 )
 from .server import ServerFamily, ServerInfo
 from .state import ConnectionState
+from .tls import (
+    DEFAULT_LOCAL_HOSTS,
+    TlsMode,
+    TlsSettings,
+    tls_required_unless_local,
+)
 from .transfer import (
     DumpStream,
     TransferResult,
@@ -102,6 +110,7 @@ __all__ = [
     "CredentialSource",
     "CredentialsAbsentError",
     "CredentialsUnobtainableError",
+    "DEFAULT_LOCAL_HOSTS",
     "DEFAULT_PORT",
     "DEFAULT_TABLE_PREFIX",
     "Database",
@@ -129,6 +138,10 @@ __all__ = [
     "ServerInfo",
     "Severity",
     "Survey",
+    "TlsHandshakeError",
+    "TlsMode",
+    "TlsSettings",
+    "TlsVerificationError",
     "TransferError",
     "TransferResult",
     "Verdict",
@@ -160,6 +173,7 @@ __all__ = [
     "rotate_password",
     "schema_version",
     "survey",
+    "tls_required_unless_local",
     "validate_database_name",
     "validate_user_name",
 ]

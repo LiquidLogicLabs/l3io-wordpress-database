@@ -123,6 +123,14 @@ class DatabaseUnreachableError(DatabaseError):
     """The database server could not be reached at all."""
 
 
+class TlsHandshakeError(DatabaseError):
+    """TLS was required but the server did not offer or complete a handshake."""
+
+
+class TlsVerificationError(DatabaseError):
+    """TLS was established but the server certificate did not verify."""
+
+
 class AuthenticationFailedError(DatabaseError):
     """The server was reached but rejected the supplied credentials."""
 

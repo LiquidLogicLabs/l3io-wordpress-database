@@ -8,10 +8,11 @@ after ``db_port`` silently discarded the port. Parsed once, frozen, no setters.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .errors import InvalidArgumentsError
 from .identifiers import validate_database_name
+from .tls import TlsSettings
 
 DEFAULT_PORT = 3306
 
@@ -38,6 +39,7 @@ class Connection:
     host: str
     database: str
     port: int = DEFAULT_PORT
+    tls: TlsSettings = field(default_factory=TlsSettings)
 
     def __post_init__(self) -> None:
         if not self.host:
@@ -47,9 +49,23 @@ class Connection:
             msg = f"port must be an integer between 1 and 65535, not {self.port!r}"
             raise InvalidArgumentsError(msg)
         validate_database_name(self.database)
+        if not isinstance(self.tls, TlsSettings):
+            msg = f"tls must be a TlsSettings, not {type(self.tls).__name__}"
+            raise InvalidArgumentsError(msg)
 
     @classmethod
-    def from_db_host(cls, db_host: str, database: str) -> Connection:
+    def from_db_host(
+        cls,
+        db_host: str,
+        database: str,
+        *,
+        tls: TlsSettings | None = None,
+    ) -> Connection:
         """Build from WordPress's ``DB_HOST``, which may carry ``host:port``."""
         host, port = _split_db_host(db_host)
-        return cls(host=host, database=database, port=port)
+        return cls(
+            host=host,
+            database=database,
+            port=port,
+            tls=TlsSettings() if tls is None else tls,
+        )

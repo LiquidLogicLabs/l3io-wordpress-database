@@ -186,14 +186,18 @@ def _quote(field: str, value: str) -> str:
 
 def option_file_text(credentials: ResolvedCredentials, connection: Connection) -> str:
     """The ``[client]`` options a program reads from the pipe."""
-    return (
-        "[client]\n"
-        f"user={_quote('user', credentials.username)}\n"
-        f"password={_quote('password', credentials.password)}\n"
-        f"host={_quote('host', connection.host)}\n"
-        f"port={connection.port}\n"
-        "protocol=TCP\n"
-    )
+    from .tls import option_file_lines
+
+    lines = [
+        "[client]",
+        f"user={_quote('user', credentials.username)}",
+        f"password={_quote('password', credentials.password)}",
+        f"host={_quote('host', connection.host)}",
+        f"port={connection.port}",
+        "protocol=TCP",
+        *option_file_lines(connection.tls),
+    ]
+    return "\n".join(lines) + "\n"
 
 
 @contextmanager
