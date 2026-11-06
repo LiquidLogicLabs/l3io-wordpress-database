@@ -23,7 +23,12 @@ ER_CANNOT_USER = 1396
 def open_connection(
     connection: Connection, credentials: ResolvedCredentials, *, database: str | None
 ) -> pymysql.connections.Connection:
-    """Open a connection. Credentials are call arguments, never a URI."""
+    """Open a connection. Credentials are call arguments, never a URI.
+
+    Auth plugins that would send or prompt for a cleartext password are refused
+    via ``auth_plugin_map`` (see :mod:`.auth`).
+    """
+    from .auth import auth_plugin_map
     from .tls import pymysql_ssl
 
     ssl_ctx = pymysql_ssl(connection.tls)
@@ -36,6 +41,7 @@ def open_connection(
         connect_timeout=CONNECT_TIMEOUT_SECONDS,
         autocommit=False,
         ssl=ssl_ctx,
+        auth_plugin_map=auth_plugin_map(),
     )
 
 

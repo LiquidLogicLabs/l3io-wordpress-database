@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from ._client import ClientTool
 from ._version import __version__
+from .auth import ALLOWED_AUTH_PLUGINS, REFUSED_AUTH_PLUGINS
 from .connection import DEFAULT_PORT, Connection
 from .credentials import (
     AwsSecretsManager,
@@ -32,6 +33,7 @@ from .encryption import (
 from .errors import (
     AccessDeniedError,
     AuthenticationFailedError,
+    AuthPluginRefusedError,
     ConfigUnreadableError,
     ConfigurationError,
     CorruptDumpError,
@@ -96,7 +98,9 @@ from .versions import SUPPORTED_FROM, SchemaVersion, release_for
 from .wpconfig import DEFAULT_TABLE_PREFIX, WpConfigFile
 
 __all__ = [
+    "ALLOWED_AUTH_PLUGINS",
     "AccessDeniedError",
+    "AuthPluginRefusedError",
     "AuthenticationFailedError",
     "AwsSecretsManager",
     "ClientTool",
@@ -129,6 +133,7 @@ __all__ = [
     "MissingDependencyError",
     "OperationResult",
     "ProvisioningError",
+    "REFUSED_AUTH_PLUGINS",
     "RefusedError",
     "RegionNotKnownError",
     "ResolvedCredentials",

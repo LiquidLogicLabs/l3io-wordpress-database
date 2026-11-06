@@ -38,6 +38,9 @@ class ConnectionState(StrEnum):
     TLS_FAILED = "tls_failed"
     """The server was contacted but TLS was required and failed."""
 
+    AUTH_PLUGIN_REFUSED = "auth_plugin_refused"
+    """The server asked for an authentication plugin this package refuses."""
+
     CREDENTIALS_UNOBTAINABLE = "credentials_unobtainable"
     """Credentials could not be obtained, so nothing was attempted."""
 
@@ -74,5 +77,6 @@ class ConnectionState(StrEnum):
         return self in {
             ConnectionState.UNREACHABLE,
             ConnectionState.TLS_FAILED,
+            ConnectionState.AUTH_PLUGIN_REFUSED,
             ConnectionState.CREDENTIALS_UNOBTAINABLE,
         }

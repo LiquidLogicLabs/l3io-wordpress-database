@@ -61,7 +61,8 @@ _NO_LOGIN_FILE = "/nonexistent/l3io-wordpress-database/no-login-file"
 _MAX_VALUE_BYTES = 1024
 
 #: Options a caller may add. Anything touching credentials, option files, the
-#: host or an output file is refused by omission.
+#: host or an output file is refused by omission. ``--enable-cleartext-plugin``
+#: is deliberately absent: the mysql client must keep cleartext auth off.
 DUMP_OPTIONS = frozenset(
     {
         "--routines",

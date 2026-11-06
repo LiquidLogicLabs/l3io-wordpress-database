@@ -203,6 +203,9 @@ package pins it. Still open on config's side: reaching PyPI.
 - Survey: validates the user name after connecting; a non-integer `db_version` raises
   `AccessDeniedError` and aborts survey; `table_count` counts views (base tables +
   views); `routine_count` / `event_count` cover procedures, functions, and events.
+- Auth: every PyMySQL connect refuses `mysql_clear_password`, `mysql_old_password`,
+  and `dialog` (`AuthPluginRefusedError`); allows native / caching_sha2 / sha256 /
+  MariaDB `client_ed25519`. CLI dumps never pass `--enable-cleartext-plugin`.
 - Observability: a refusal marks the span ERROR while the log says "refused";
   `set_tracer_provider` at test-module import; `except BaseException` labels interrupts
   "failed".

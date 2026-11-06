@@ -189,9 +189,13 @@ def _preflight_resolved(
 
     Returns the verdict and, only when it holds no blocker, the open session.
     """
+    from .errors import AuthPluginRefusedError
+
     verdict = Verdict(operation_name)
     try:
         session = open_connection(connection, resolved, database=None)
+    except AuthPluginRefusedError:
+        raise
     except Exception as exc:  # noqa: BLE001 - SSLError and driver errors both map here
         state = classify(exc)
         if state is ConnectionState.AUTHENTICATION_FAILED:

@@ -135,6 +135,18 @@ class AuthenticationFailedError(DatabaseError):
     """The server was reached but rejected the supplied credentials."""
 
 
+class AuthPluginRefusedError(DatabaseError):
+    """The server asked for an authentication plugin this package will not use.
+
+    ``plugin`` is the server-requested name. The message never includes the
+    password.
+    """
+
+    def __init__(self, plugin: str, message: str | None = None) -> None:
+        self.plugin = plugin
+        super().__init__(message or f"authentication plugin {plugin!r} is not allowed")
+
+
 class AccessDeniedError(DatabaseError):
     """Authentication succeeded but the account may not use the database."""
 

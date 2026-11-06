@@ -68,11 +68,13 @@ def _connect_or_raise(
     connection: Connection, credentials: ResolvedCredentials, database: str | None
 ) -> Any:
     """Open a session, or raise a package error saying why it could not be."""
-    from .errors import TlsHandshakeError, TlsVerificationError
+    from .errors import AuthPluginRefusedError, TlsHandshakeError, TlsVerificationError
     from .tls import is_tls_failure, is_verification_failure
 
     try:
         return open_connection(connection, credentials, database=database)
+    except AuthPluginRefusedError:
+        raise
     except Exception as exc:  # noqa: BLE001 - SSLError and driver errors both map here
         if (
             isinstance(exc, pymysql.err.MySQLError)
@@ -222,8 +224,12 @@ def inspect(connection: Connection, credentials: CredentialSource) -> Connection
         ):
             fields["state"] = str(ConnectionState.CREDENTIALS_UNOBTAINABLE)
             return ConnectionState.CREDENTIALS_UNOBTAINABLE
+        from .errors import AuthPluginRefusedError
+
         try:
             session = open_connection(connection, resolved, database=connection.database)
+        except AuthPluginRefusedError:
+            state = ConnectionState.AUTH_PLUGIN_REFUSED
         except Exception as exc:  # noqa: BLE001 - SSLError and driver errors both map here
             state = classify(exc)
         else:
