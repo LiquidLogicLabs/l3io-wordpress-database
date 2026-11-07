@@ -153,12 +153,13 @@ def test_binder_available_false_on_import_error(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_cli_available_requires_both_binaries(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _age_only(name: str) -> str | None:
+    def _age_only(name: str, path: str | None = None) -> str | None:
+        del path
         return "/bin/age" if name == "age" else None
 
     monkeypatch.setattr(shutil, "which", _age_only)
     assert _passphrase.cli_available() is False
-    monkeypatch.setattr(shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: f"/bin/{name}")
     assert _passphrase.cli_available() is True
 
 
@@ -291,14 +292,19 @@ class _FakeProc:
 
 def test_cli_crypt_success_and_maps_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("L3IO_AGE_PASSPHRASE_BACKEND", "cli")
-    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setenv("L3IO_WP_BACKUP_TOKEN", "should-not-reach-age")
+    monkeypatch.setenv("HOME", "/home/operator")
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: f"/usr/bin/{name}")
 
     sealed = b"age-encryption.org/v1\n" + b"\x00" * 32
     calls: list[str] = []
+    seen_env: list[dict[str, str]] = []
 
     def _popen(*_a: Any, **_k: Any) -> _FakeProc:
         mode = "encrypt" if "-e" in (_a[0] if _a else _k.get("args", [])) else "decrypt"
         calls.append(mode)
+        env = _k.get("env") or {}
+        seen_env.append(dict(env))
         if mode == "encrypt":
             return _FakeProc(code=0, stdout=sealed)
         return _FakeProc(code=0, stdout=PLAIN)
@@ -311,6 +317,10 @@ def test_cli_crypt_success_and_maps_failures(monkeypatch: pytest.MonkeyPatch) ->
     _passphrase.decrypt_io(io.BytesIO(sealed), plain, PASSPHRASE)
     assert plain.getvalue() == PLAIN
     assert calls == ["encrypt", "decrypt"]
+    assert seen_env
+    assert set(seen_env[0]) == {"PATH", "HOME", "LC_ALL", "AGE_PASSPHRASE_FD"}
+    assert seen_env[0]["HOME"] == "/home/operator"
+    assert "L3IO_WP_BACKUP_TOKEN" not in seen_env[0]
 
     def _fail_decrypt(*_a: Any, **_k: Any) -> _FakeProc:
         return _FakeProc(code=1, stderr=b"no identity matched\n")
@@ -343,7 +353,7 @@ def test_cli_crypt_success_and_maps_failures(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_cli_crypt_surfaces_stdin_broken_pipe(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("L3IO_AGE_PASSPHRASE_BACKEND", "cli")
-    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: f"/usr/bin/{name}")
     msg = "closed"
 
     def _popen(*_a: Any, **_k: Any) -> _FakeProc:
@@ -357,7 +367,7 @@ def test_cli_crypt_surfaces_stdin_broken_pipe(monkeypatch: pytest.MonkeyPatch) -
 def test_cli_crypt_requires_binaries(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("L3IO_AGE_PASSPHRASE_BACKEND", "cli")
     monkeypatch.setattr(_passphrase, "resolve_backend", lambda: "cli")
-    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    monkeypatch.setattr(shutil, "which", lambda _name, path=None: None)
     with pytest.raises(InvalidArgumentsError, match="age and age-plugin-batchpass"):
         _passphrase.encrypt_io(io.BytesIO(b"x"), io.BytesIO(), PASSPHRASE)
 
@@ -412,7 +422,7 @@ def test_binder_decrypt_reraises_oserror_with_errno(monkeypatch: pytest.MonkeyPa
 
 def test_cli_crypt_surfaces_stdin_oserror(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("L3IO_AGE_PASSPHRASE_BACKEND", "cli")
-    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: f"/usr/bin/{name}")
     msg = "disk full"
 
     def _popen(*_a: Any, **_k: Any) -> _FakeProc:
@@ -425,7 +435,7 @@ def test_cli_crypt_surfaces_stdin_oserror(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_cli_crypt_surfaces_stdin_other_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("L3IO_AGE_PASSPHRASE_BACKEND", "cli")
-    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: f"/usr/bin/{name}")
     msg = "boom"
 
     def _popen(*_a: Any, **_k: Any) -> _FakeProc:
@@ -438,7 +448,7 @@ def test_cli_crypt_surfaces_stdin_other_exception(monkeypatch: pytest.MonkeyPatc
 
 def test_cli_crypt_rejects_missing_pipes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("L3IO_AGE_PASSPHRASE_BACKEND", "cli")
-    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: f"/usr/bin/{name}")
 
     class _NoPipes:
         stdin = None

@@ -206,6 +206,11 @@ package pins it. Still open on config's side: reaching PyPI.
 - Auth: every PyMySQL connect refuses `mysql_clear_password`, `mysql_old_password`,
   and `dialog` (`AuthPluginRefusedError`); allows native / caching_sha2 / sha256 /
   MariaDB `client_ed25519`. CLI dumps never pass `--enable-cleartext-plugin`.
+- Spans: failures set `error.type` and status ERROR with no description; no
+  `record_exception` (messages/stacks can carry usernames or SQL).
+- Children: `mysql`/`mysqldump` and `age` get an explicit minimal env (sanitized
+  absolute PATH only); age also gets HOME + AGE_PASSPHRASE_FD, never the parent
+  environ.
 - Observability: a refusal marks the span ERROR while the log says "refused";
   `set_tracer_provider` at test-module import; `except BaseException` labels interrupts
   "failed".

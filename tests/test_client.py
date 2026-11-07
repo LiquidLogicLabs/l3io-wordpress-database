@@ -145,11 +145,32 @@ def test_option_pipe_is_readable_once_and_closed_after() -> None:
 
 
 def test_child_env_holds_no_secret_channel(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("MYSQL_PWD", "MYSQL_HOST", "HOME", "MYSQL_TCP_PORT"):
+    for name in ("MYSQL_PWD", "MYSQL_HOST", "HOME", "MYSQL_TCP_PORT", "AWS_SECRET_ACCESS_KEY"):
         monkeypatch.setenv(name, "inherited")
     env = _client.child_env()
-    assert set(env) == {"PATH", "LANG", "LC_ALL", "MYSQL_TEST_LOGIN_FILE"}
+    assert set(env) == {"PATH", "LC_ALL", "MYSQL_TEST_LOGIN_FILE"}
+    assert env["LC_ALL"] == "C"
     assert not Path(env["MYSQL_TEST_LOGIN_FILE"]).exists()
+    assert "AWS_SECRET_ACCESS_KEY" not in env
+    assert "HOME" not in env
+
+
+def test_sanitized_path_drops_empty_and_relative_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PATH", os.pathsep.join(["/usr/bin", "", "relative/bin", "/bin", "."]))
+    assert _client.sanitized_path() == os.pathsep.join(["/usr/bin", "/bin"])
+    assert _client.which_absolute("no-such-l3io-tool-xyz") is None
+
+
+def test_age_child_env_is_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", "/home/operator")
+    monkeypatch.setenv("L3IO_WP_BACKUP_TOKEN", "secret")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")
+    env = _client.age_child_env(passphrase_fd=7)
+    assert set(env) == {"PATH", "HOME", "LC_ALL", "AGE_PASSPHRASE_FD"}
+    assert env["HOME"] == "/home/operator"
+    assert env["LC_ALL"] == "C"
+    assert env["AGE_PASSPHRASE_FD"] == "7"
+    assert "L3IO_WP_BACKUP_TOKEN" not in env
 
 
 def test_argv_puts_the_defaults_file_first() -> None:

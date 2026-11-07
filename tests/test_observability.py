@@ -75,6 +75,20 @@ def test_failure_is_reported_and_reraised(logs: LogCapture) -> None:
     assert span.status.status_code is trace.StatusCode.ERROR
 
 
+def test_span_records_error_type_without_message_or_stack(logs: LogCapture) -> None:
+    leak = "user 'admin'@'evil.host' Access denied FOR SELECT * FROM wp_users"
+    with pytest.raises(RuntimeError, match="evil"), operation("ensure", CONN):
+        raise RuntimeError(leak)
+    assert logs.entries[-1]["outcome"] == "failed"
+    [span] = _EXPORTER.get_finished_spans()
+    assert span.status.status_code is trace.StatusCode.ERROR
+    assert span.status.description is None
+    assert span.attributes is not None
+    assert span.attributes["error.type"] == "RuntimeError"
+    assert span.events == ()
+    assert leak not in repr(dict(span.attributes))
+
+
 def test_span_nests_under_the_callers_span() -> None:
     tracer = trace.get_tracer("caller")
     with tracer.start_as_current_span("phase"), operation("survey", CONN):

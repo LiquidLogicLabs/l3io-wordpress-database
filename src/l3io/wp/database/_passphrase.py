@@ -37,7 +37,9 @@ def binder_available() -> bool:
 
 
 def cli_available() -> bool:
-    return shutil.which("age") is not None and shutil.which("age-plugin-batchpass") is not None
+    from ._client import which_absolute
+
+    return which_absolute("age") is not None and which_absolute("age-plugin-batchpass") is not None
 
 
 def resolve_backend() -> BackendName:
@@ -146,15 +148,16 @@ def _cli_crypt(
     *,
     encrypt: bool,
 ) -> None:
-    age_bin = shutil.which("age")
-    if age_bin is None or shutil.which("age-plugin-batchpass") is None:
+    from ._client import age_child_env, which_absolute
+
+    age_bin = which_absolute("age")
+    plugin = which_absolute("age-plugin-batchpass")
+    if age_bin is None or plugin is None:
         msg = "age and age-plugin-batchpass must be on PATH for the CLI passphrase backend"
         raise InvalidArgumentsError(msg)
 
     pass_fd = _open_passphrase_fd(passphrase)
-    drop = {"AGE_PASSPHRASE", "AGE_PASSPHRASE_FILE"}
-    env = {k: v for k, v in os.environ.items() if k not in drop}
-    env["AGE_PASSPHRASE_FD"] = str(pass_fd)
+    env = age_child_env(passphrase_fd=pass_fd)
     args = [age_bin, "-e" if encrypt else "-d", "-j", "batchpass"]
     try:
         proc = subprocess.Popen(  # noqa: S603 - absolute age from PATH, fixed args

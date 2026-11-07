@@ -24,12 +24,26 @@ _log = structlog.get_logger("l3io.wp.database")
 _tracer = trace.get_tracer("l3io.wp.database")
 
 
+def _mark_error(span: trace.Span, error: BaseException) -> None:
+    """Record failure on a span without message or stack (BL-E006-010).
+
+    MySQL and package errors can carry usernames, hosts or SQL. Only the
+    exception type is an attribute; status is ERROR with no description.
+    """
+    span.set_attribute("error.type", type(error).__name__)
+    span.set_status(Status(StatusCode.ERROR))
+
+
 @contextmanager
 def operation(name: str, connection: Connection) -> Iterator[dict[str, object]]:
     """Wrap one public operation in a span and a completion event."""
     fields: dict[str, object] = {}
     started = time.monotonic()
-    with _tracer.start_as_current_span(f"l3io.wp.database.{name}") as span:
+    with _tracer.start_as_current_span(
+        f"l3io.wp.database.{name}",
+        record_exception=False,
+        set_status_on_exception=False,
+    ) as span:
         span.set_attribute("db.name", connection.database)
         span.set_attribute("server.address", connection.host)
         span.set_attribute("server.port", connection.port)
@@ -37,10 +51,12 @@ def operation(name: str, connection: Connection) -> Iterator[dict[str, object]]:
             yield fields
         except RefusedError as exc:
             span.set_attribute("l3io.verdict.codes", [str(f.code) for f in exc.verdict.blockers])
+            _mark_error(span, exc)
             fields[VERDICT_KEY] = exc.verdict
             _complete(name, connection, "refused", started, fields)
             raise
-        except BaseException:
+        except BaseException as exc:
+            _mark_error(span, exc)
             _complete(name, connection, "failed", started, fields)
             raise
         _complete(name, connection, "succeeded", started, fields)
@@ -86,8 +102,7 @@ class Running:
             span.set_attribute("l3io.verdict.codes", [str(f.code) for f in error.verdict.blockers])
             self.fields[VERDICT_KEY] = error.verdict
         if isinstance(error, Exception):
-            span.record_exception(error)
-            span.set_status(Status(StatusCode.ERROR, f"{type(error).__name__}: {error}"))
+            _mark_error(span, error)
         outcome = (
             "succeeded"
             if error is None

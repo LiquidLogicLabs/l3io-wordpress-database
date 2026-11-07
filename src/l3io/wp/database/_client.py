@@ -20,6 +20,7 @@ import subprocess
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 from .connection import Connection
 from .credentials import ResolvedCredentials
@@ -117,17 +118,56 @@ def parse_client_version(name: str, path: str, text: str) -> ClientTool:
     return ClientTool(name, path, family, (major, minor, patch), text.strip())
 
 
+def sanitized_path(raw: str | None = None) -> str:
+    """``PATH`` with empty and relative entries dropped (BL-E004-055).
+
+    A relative PATH entry would let a child resolve tools against the caller's
+    cwd. Only absolute directories remain.
+    """
+    source = os.environ.get("PATH", os.defpath) if raw is None else raw
+    return os.pathsep.join(
+        entry for entry in source.split(os.pathsep) if entry and Path(entry).is_absolute()
+    )
+
+
+def which_absolute(name: str, *, path: str | None = None) -> str | None:
+    """``shutil.which`` over a sanitized PATH; refuse a non-absolute result."""
+    search = sanitized_path() if path is None else sanitized_path(path)
+    if not search:
+        return None
+    found = shutil.which(name, path=search)
+    if found is None or not Path(found).is_absolute():
+        return None
+    return found
+
+
 def child_env() -> dict[str, str]:
     """The entire environment a client program gets.
 
     No ``HOME``, ``MYSQL_PWD``, ``MYSQL_HOST`` or ``MYSQL_TCP_PORT``: nothing
-    inherited can authenticate or redirect it.
+    inherited can authenticate or redirect it. Credentials arrive only through
+    the option-file pipe. ``PATH`` is sanitized; ``LC_ALL`` is ``C``.
     """
     return {
-        "PATH": os.environ.get("PATH", os.defpath),
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
+        "PATH": sanitized_path(),
+        "LC_ALL": "C",
         "MYSQL_TEST_LOGIN_FILE": _NO_LOGIN_FILE,
+    }
+
+
+def age_child_env(*, passphrase_fd: int) -> dict[str, str]:
+    """Minimal environment for ``age`` and plugins it may exec (BL-E004-055).
+
+    Absolute ``PATH`` only, ``LC_ALL=C``, an absolute ``HOME`` when the parent
+    has one (else a non-existent absolute path), and ``AGE_PASSPHRASE_FD``.
+    No other parent variables (cloud keys, ``L3IO_WP_BACKUP_*``, …).
+    """
+    home = os.environ.get("HOME", "")
+    return {
+        "PATH": sanitized_path(),
+        "HOME": home if home and Path(home).is_absolute() else "/nonexistent",
+        "LC_ALL": "C",
+        "AGE_PASSPHRASE_FD": str(passphrase_fd),
     }
 
 
@@ -141,7 +181,7 @@ def candidates(purpose: str, family: ServerFamily) -> tuple[str, ...]:
 def find_tool(purpose: str, family: ServerFamily) -> ClientTool | None:
     """The best client program on ``PATH`` for this server, or ``None``."""
     for name in candidates(purpose, family):
-        path = shutil.which(name)
+        path = which_absolute(name)
         if path is None:
             continue
         try:
