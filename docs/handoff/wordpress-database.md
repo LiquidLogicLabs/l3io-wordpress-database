@@ -211,6 +211,8 @@ package pins it. Still open on config's side: reaching PyPI.
 - Children: `mysql`/`mysqldump` and `age` get an explicit minimal env (sanitized
   absolute PATH only); age also gets HOME + AGE_PASSPHRASE_FD, never the parent
   environ.
+- TLS option file is per client family: MySQL gets `ssl-mode` only; MariaDB gets
+  `ssl` + `ssl-verify-server-cert` (never both, never `loose-`).
 - Observability: a refusal marks the span ERROR while the log says "refused";
   `set_tracer_provider` at test-module import; `except BaseException` labels interrupts
   "failed".

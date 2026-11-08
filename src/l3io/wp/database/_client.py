@@ -225,8 +225,14 @@ def _quote(field: str, value: str) -> str:
     return f'"{escaped}"'
 
 
-def option_file_text(credentials: ResolvedCredentials, connection: Connection) -> str:
-    """The ``[client]`` options a program reads from the pipe."""
+def option_file_text(
+    credentials: ResolvedCredentials, connection: Connection, family: ServerFamily
+) -> str:
+    """The ``[client]`` options a program reads from the pipe.
+
+    ``family`` selects TLS option names the client accepts (MySQL ``ssl-mode``
+    vs MariaDB ``ssl`` / ``ssl-verify-server-cert``).
+    """
     from .tls import option_file_lines
 
     lines = [
@@ -236,18 +242,20 @@ def option_file_text(credentials: ResolvedCredentials, connection: Connection) -
         f"host={_quote('host', connection.host)}",
         f"port={connection.port}",
         "protocol=TCP",
-        *option_file_lines(connection.tls),
+        *option_file_lines(connection.tls, family),
     ]
     return "\n".join(lines) + "\n"
 
 
 @contextmanager
-def option_pipe(credentials: ResolvedCredentials, connection: Connection) -> Iterator[int]:
+def option_pipe(
+    credentials: ResolvedCredentials, connection: Connection, family: ServerFamily
+) -> Iterator[int]:
     """A pipe holding the option file; yields its read end, closed on exit.
 
     Pass the fd with ``pass_fds`` and name it ``/dev/fd/N``. Nothing touches disk.
     """
-    data = option_file_text(credentials, connection).encode()
+    data = option_file_text(credentials, connection, family).encode()
     read_fd, write_fd = os.pipe()
     try:
         while data:

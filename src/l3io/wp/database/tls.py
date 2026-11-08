@@ -14,6 +14,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from .errors import InvalidArgumentsError
+from .server import ServerFamily
 
 #: Hosts treated as local by :func:`tls_required_unless_local`.
 DEFAULT_LOCAL_HOSTS: frozenset[str] = frozenset(
@@ -121,17 +122,23 @@ def pymysql_ssl(settings: TlsSettings) -> ssl.SSLContext | None:
     return ctx
 
 
-def option_file_lines(settings: TlsSettings) -> tuple[str, ...]:
-    """``[client]`` option-file lines for MySQL/MariaDB client tools."""
+def option_file_lines(settings: TlsSettings, family: ServerFamily) -> tuple[str, ...]:
+    """``[client]`` TLS lines for one client family.
+
+    MySQL 8.4 rejects ``ssl=1`` (``ssl-mode`` only). MariaDB rejects
+    ``ssl-mode`` (``ssl`` plus ``ssl-verify-server-cert`` for verify modes).
+    Never use the ``loose-`` prefix: an unknown security option must fail
+    loudly, not skip verification.
+    """
     if settings.mode is TlsMode.OFF:
         return ()
-    lines = [
-        "ssl=1",
-        f"ssl-mode={_client_ssl_mode(settings.mode)}",
-    ]
-    if settings.mode in (TlsMode.VERIFY_CA, TlsMode.VERIFY_IDENTITY):
-        # Older MariaDB clients honour this when ssl-mode is unknown.
-        lines.append("ssl-verify-server-cert=1")
+    lines: list[str] = []
+    if family is ServerFamily.MYSQL:
+        lines.append(f"ssl-mode={_client_ssl_mode(settings.mode)}")
+    else:
+        lines.append("ssl=1")
+        if settings.mode in (TlsMode.VERIFY_CA, TlsMode.VERIFY_IDENTITY):
+            lines.append("ssl-verify-server-cert=1")
     if settings.ca_file is not None:
         lines.append(f"ssl-ca={_quote_path(settings.ca_file)}")
     if settings.cert_file is not None:

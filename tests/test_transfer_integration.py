@@ -230,7 +230,7 @@ def test_the_planted_login_file_is_read_without_suppression(tmp_path: Path) -> N
     assert tool is not None
     env = {k: v for k, v in _client.child_env().items() if k != "MYSQL_TEST_LOGIN_FILE"}
     credentials = ResolvedCredentials("someone", "unused")
-    with _client.option_pipe(credentials, site("unused")) as fd:
+    with _client.option_pipe(credentials, site("unused"), ServerFamily.MYSQL) as fd:
         done = subprocess.run(  # noqa: S603 - a found client tool, fixed arguments
             [tool.path, f"--defaults-file=/dev/fd/{fd}", "--print-defaults"],
             capture_output=True,

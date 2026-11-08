@@ -88,7 +88,7 @@ def _start(
     for_load: bool,
 ) -> subprocess.Popen[bytes]:
     """Run a client program with its options in a pipe and a minimal environment."""
-    with _client.option_pipe(credentials, connection) as fd:
+    with _client.option_pipe(credentials, connection, tool.family) as fd:
         return subprocess.Popen(  # noqa: S603 - argv built from a found tool and an allow-list
             _client.argv(tool, fd, args),
             stdin=subprocess.PIPE if for_load else subprocess.DEVNULL,
