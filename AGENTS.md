@@ -78,13 +78,15 @@ Family-wide. Applies to this repo and to backup/config/passphrase:
 
 1. Work is not done until GitHub CI is completely green: every job and every
    matrix leg, including clean install.
-2. Before any release, tag, or publish, run the full workflow locally with act
-   (`make ci`): every Python, every database engine, every job act can run.
-   Anything act cannot run must be named (here: `upload-artifact`; all of
-   `publish.yml` / `release.yml` — dry-run with `make ci-dryrun`), not skipped
-   silently.
-3. Never release or publish while CI is red. Gate releases on a green local act
-   run and green GitHub CI.
+2. Before any release, tag, or publish, run `make preflight` for that commit.
+   It runs `make check`, then everything act can: `ci.yml` (full unnarrowed
+   Python × engine matrix, transfer, clean install) and `security-audit.yml`,
+   plus dry-runs of `release.yml` / `publish.yml`. GitHub-only (named, not
+   skipped silently): `upload-artifact`; all of `publish.yml` / `release.yml`.
+3. Never release or publish while CI is red. **Release only through
+   `make release`**, which refuses without a preflight stamp for HEAD and
+   without every GitHub run for HEAD's full SHA completed as `success`.
+   Dispatching `release.yml` by hand bypasses both checks.
 
 `vars.LOCAL_ACT` must not narrow matrices. `make ci` uses `--concurrent-jobs 1`
 so the full matrix can share the step-bound host ports.
