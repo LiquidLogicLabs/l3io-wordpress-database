@@ -171,6 +171,15 @@ jobs:
           python-version: ${{ matrix.python }}
           enable-cache: ${{ !vars.LOCAL_ACT }}
       - run: uv sync --locked --all-extras --dev
+      # Ubuntu's mysql-client is often the only dump tool when mariadb-dump is
+      # absent (candidates falls back to mysqldump). Install it on MariaDB legs
+      # so tests/test_dump_mysql_on_mariadb.py exercises that path.
+      - name: install MySQL client for MariaDB dump coverage
+        if: startsWith(matrix.engine.image, 'mariadb:')
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mysql-client
       - name: pytest against engine
         # Integration tests cover the portable CREATE USER / ALTER USER / GRANT
         # sequence on every engine, idempotence with zero writes on a second

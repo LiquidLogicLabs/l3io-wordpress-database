@@ -193,6 +193,7 @@ def test_argv_puts_the_defaults_file_first() -> None:
 
 def test_dump_args() -> None:
     mysql = ClientTool("mysqldump", "/m", ServerFamily.MYSQL, (8, 4, 11), "v")
+    mysql57 = ClientTool("mysqldump", "/m", ServerFamily.MYSQL, (5, 7, 44), "v")
     maria = ClientTool("mariadb-dump", "/m", ServerFamily.MARIADB, (11, 4, 13), "v")
     base = [
         "--single-transaction",
@@ -208,6 +209,22 @@ def test_dump_args() -> None:
         "wp_site",
     ]
     assert _client.dump_args(maria, "wp_site", []) == [*base, "wp_site"]
+    # MySQL 8+ client dumping MariaDB must disable COLUMN_STATISTICS (error 1109).
+    assert _client.dump_args(mysql, "wp_site", [], server_family=ServerFamily.MARIADB) == [
+        *base,
+        "--set-gtid-purged=OFF",
+        "--column-statistics=0",
+        "wp_site",
+    ]
+    assert "--column-statistics=0" not in _client.dump_args(
+        mysql, "wp_site", [], server_family=ServerFamily.MYSQL
+    )
+    assert "--column-statistics=0" not in _client.dump_args(
+        mysql57, "wp_site", [], server_family=ServerFamily.MARIADB
+    )
+    assert "--column-statistics=0" not in _client.dump_args(
+        maria, "wp_site", [], server_family=ServerFamily.MARIADB
+    )
 
 
 def test_load_args() -> None:

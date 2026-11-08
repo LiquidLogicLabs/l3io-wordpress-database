@@ -244,6 +244,9 @@ class DumpStream:
             else:
                 first = stderr.strip().splitlines()[0] if stderr.strip() else "no error output"
                 msg = f"dump failed: {self._tool.name} exited {code}: {first}"
+                # Backup often drops client stderr; keep a known cause in the message.
+                if "COLUMN_STATISTICS" in stderr:
+                    msg += "; MySQL 8+ mysqldump against MariaDB needs --column-statistics=0"
             error = TransferError(msg, self._verdict, code, stderr)
             run.notify(error)
             raise error from run.error
@@ -421,11 +424,17 @@ def _start_dump(
     fields[VERDICT_KEY] = plan.verdict
     if not plan.verdict.ok or plan.tool is None or plan.server is None or plan.credentials is None:
         raise RefusedError(plan.verdict)
+    tool, server, creds = plan.tool, plan.server, plan.credentials
     try:
         process = _start(
-            plan.tool,
-            _client.dump_args(plan.tool, connection.database, options),
-            plan.credentials,
+            tool,
+            _client.dump_args(
+                tool,
+                connection.database,
+                options,
+                server_family=server.family,
+            ),
+            creds,
             connection,
             for_load=False,
         )
@@ -435,11 +444,11 @@ def _start_dump(
     try:
         return DumpStream(
             process,
-            tool=plan.tool,
-            server=plan.server,
+            tool=tool,
+            server=server,
             verdict=plan.verdict,
             recipients=recipients,
-            password=plan.credentials.password,
+            password=creds.password,
             on_finish=finish,
             passphrase=passphrase,
         )

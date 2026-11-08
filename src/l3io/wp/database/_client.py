@@ -284,8 +284,22 @@ def argv(tool: ClientTool, fd: int, args: Sequence[str]) -> list[str]:
     return [tool.path, f"--defaults-file=/dev/fd/{fd}", *_login_path_args(tool), *args]
 
 
-def dump_args(tool: ClientTool, database: str, options: Sequence[str]) -> list[str]:
-    """Consistent, streaming, binary-safe, without CREATE DATABASE/USE (V7)."""
+def dump_args(
+    tool: ClientTool,
+    database: str,
+    options: Sequence[str],
+    *,
+    server_family: ServerFamily | None = None,
+) -> list[str]:
+    """Consistent, streaming, binary-safe, without CREATE DATABASE/USE (V7).
+
+    ``server_family`` is the server being dumped (not the client). MySQL
+    mysqldump 8.0+ queries ``information_schema.COLUMN_STATISTICS`` by default;
+    MariaDB has no such table, so a MySQL-client dump of a MariaDB server fails
+    with error 1109 unless ``--column-statistics=0`` is set. Ubuntu's
+    ``mysql-client`` package is often the only dump tool on PATH for MariaDB
+    hosts (``candidates`` falls back to ``mysqldump``).
+    """
     args = [
         "--single-transaction",
         "--quick",
@@ -295,6 +309,8 @@ def dump_args(tool: ClientTool, database: str, options: Sequence[str]) -> list[s
     ]
     if tool.family is ServerFamily.MYSQL:
         args.append("--set-gtid-purged=OFF")
+        if server_family is ServerFamily.MARIADB and tool.version >= (8, 0, 0):
+            args.append("--column-statistics=0")
     return [*args, *options, database]
 
 
