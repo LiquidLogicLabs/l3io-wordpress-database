@@ -65,10 +65,13 @@ test-db: ## Integration tests against a server; set DB_HOST first
 	$(UV) run pytest -q tests/test_integration.py
 
 # Host ports bound from steps (not workflow `services:`), so act does not
-# allocate them up front across the matrix. `make ci` keeps --concurrent-jobs 1
-# so legs serialize on these ports. Values match ci.yml L3IO_ACT_HOST_PORTS.
-TEST_PORT ?= 33398
+# allocate them up front across the matrix. Prefer --concurrent-jobs 1; also
+# flock + an ephemeral port because act has been observed to overlap matrix
+# legs anyway, which collides on a fixed 33398. Defaults match ci.yml
+# L3IO_ACT_HOST_PORTS when a caller forces TEST_PORT/TRANSFER_PORT.
+TEST_PORT ?=
 TRANSFER_PORT ?= 33399
+TEST_ENGINE_LOCK := /tmp/l3io-wordpress-database-test-engine.lock
 # Prebuilt abi3 wheel for l3io-age-passphrase (server images have no C compiler).
 BINDER_WHEEL_DIR ?= $(CURDIR)/.cache/age-passphrase-wheels
 BINDER_VERSION ?= 0.1.1
@@ -78,22 +81,29 @@ BINDER_WHEEL_URL ?= https://github.com/LiquidLogicLabs/l3io-age-passphrase/relea
 test-engine: ## Full pytest against ENGINE server image (CI test job; act-safe)
 	@test -n "$(ENGINE)" || { echo "set ENGINE, e.g. make test-engine ENGINE=mysql:8.0"; exit 1; }
 	@set -eu; \
+	flock "$(TEST_ENGINE_LOCK)" bash -c ' \
+	set -eu; \
+	port="$(TEST_PORT)"; \
+	if [ -z "$$port" ]; then \
+	  port=$$(python3 -c "import socket; s=socket.socket(); s.bind((\"127.0.0.1\",0)); print(s.getsockname()[1]); s.close()"); \
+	fi; \
 	name="l3io-test-$$$$"; \
 	docker run -d --rm --name "$$name" -e MYSQL_ROOT_PASSWORD=root -e MARIADB_ROOT_PASSWORD=root \
-	  -p 127.0.0.1:$(TEST_PORT):3306 "$(ENGINE)" >/dev/null; \
-	trap 'docker rm -f "'"$$name"'" >/dev/null 2>&1' EXIT; \
-	trap 'exit 130' INT TERM; \
-	export DB_HOST=127.0.0.1 DB_PORT=$(TEST_PORT) DB_ADMIN_USER=root DB_ADMIN_PASSWORD=root; \
+	  -p 127.0.0.1:$$port:3306 "$(ENGINE)" >/dev/null; \
+	trap "docker rm -f \"$$name\" >/dev/null 2>&1" EXIT; \
+	trap "exit 130" INT TERM; \
+	export DB_HOST=127.0.0.1 DB_PORT=$$port DB_ADMIN_USER=root DB_ADMIN_PASSWORD=root; \
 	for _ in $$(seq 1 90); do \
-	  if $(UV) run --no-sync python -c "import os, pymysql; pymysql.connect(host=os.environ['DB_HOST'], port=int(os.environ['DB_PORT']), user='root', password='root').close()" 2>/dev/null; then \
+	  if $(UV) run --no-sync python -c "import os, pymysql; pymysql.connect(host=os.environ[\"DB_HOST\"], port=int(os.environ[\"DB_PORT\"]), user=\"root\", password=\"root\").close()" 2>/dev/null; then \
 	    break; \
 	  fi; \
 	  sleep 2; \
 	done; \
-	$(UV) run --no-sync python -c "import os, pymysql; pymysql.connect(host=os.environ['DB_HOST'], port=int(os.environ['DB_PORT']), user='root', password='root').close()" >/dev/null; \
+	$(UV) run --no-sync python -c "import os, pymysql; pymysql.connect(host=os.environ[\"DB_HOST\"], port=int(os.environ[\"DB_PORT\"]), user=\"root\", password=\"root\").close()" >/dev/null; \
 	$(UV) run --no-sync pytest -q \
 	  --cov=l3io.wp.database --cov-report=term-missing \
-	  --cov-report=xml:$${COVERAGE_XML:-/tmp/l3io-coverage.xml}
+	  --cov-report=xml:$${COVERAGE_XML:-/tmp/l3io-coverage.xml} \
+	'
 
 test-transfer: ## Export/import tests against ENGINE (a server image) using its own client tools
 	@test -n "$(ENGINE)" || { echo "set ENGINE, e.g. make test-transfer ENGINE=mysql:8.4"; exit 1; }
