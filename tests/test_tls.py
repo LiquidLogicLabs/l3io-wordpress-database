@@ -119,19 +119,17 @@ def _client_on_path(*names: str) -> str | None:
 
 
 @pytest.mark.parametrize(
-    ("family", "binaries", "must_accept", "must_reject"),
+    ("family", "binaries", "must_accept"),
     [
         (
             ServerFamily.MYSQL,
             ("mysql", "mysqldump"),
             ("ssl-mode=VERIFY_IDENTITY", 'ssl-ca="/nonexistent/ca.pem"'),
-            ("ssl=1",),
         ),
         (
             ServerFamily.MARIADB,
             ("mariadb", "mariadb-dump", "mysql", "mysqldump"),
             ("ssl=1", "ssl-verify-server-cert=1", 'ssl-ca="/nonexistent/ca.pem"'),
-            ("ssl-mode=VERIFY_IDENTITY",),
         ),
     ],
 )
@@ -140,13 +138,15 @@ def test_real_client_print_defaults_accepts_family_tls_options(
     family: ServerFamily,
     binaries: tuple[str, ...],
     must_accept: tuple[str, ...],
-    must_reject: tuple[str, ...],
 ) -> None:
-    """Unknown TLS option names must fail the real client (no ``loose-``)."""
+    """Family TLS lines must parse; foreign names must fail when the client removed them.
+
+    MySQL 8.0 still accepts deprecated ``ssl=1``; only 8.4+ rejects it. MariaDB
+    rejects ``ssl-mode``. Always assert the family's own lines are accepted.
+    """
     binary = _client_on_path(*binaries)
     if binary is None:
         pytest.skip(f"no {'/'.join(binaries)} on PATH")
-    # Prefer a binary that matches the family when both are installed.
     version = subprocess.run(  # noqa: S603
         [binary, "--version"],
         capture_output=True,
@@ -154,7 +154,8 @@ def test_real_client_print_defaults_accepts_family_tls_options(
         env=_client.child_env(),
         check=False,
     )
-    banner = (version.stdout or version.stderr).lower()
+    banner_text = version.stdout or version.stderr
+    banner = banner_text.lower()
     if family is ServerFamily.MYSQL and "mariadb" in banner:
         pytest.skip(f"{binary} is a MariaDB client; need a MySQL client for this case")
     if (
@@ -175,6 +176,14 @@ def test_real_client_print_defaults_accepts_family_tls_options(
     )
     assert accepted.returncode == 0, accepted.stderr
     assert "unknown variable" not in accepted.stderr.lower()
+
+    must_reject: tuple[str, ...]
+    if family is ServerFamily.MARIADB:
+        must_reject = ("ssl-mode=VERIFY_IDENTITY",)
+    else:
+        tool = _client.parse_client_version(Path(binary).name, binary, banner_text)
+        # MySQL 8.0 still accepts deprecated ssl=1; 8.4 removed it (sidecar failure).
+        must_reject = ("ssl=1",) if tool.version >= (8, 4, 0) else ()
 
     for bad_line in must_reject:
         bad = tmp_path / f"bad-{bad_line.split('=')[0]}.cnf"
