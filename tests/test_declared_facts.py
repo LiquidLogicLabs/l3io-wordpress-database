@@ -58,10 +58,11 @@ def declared_pythons(project: dict[str, Any]) -> set[str]:
 
 
 def _matrix_values(value: Any) -> set[str]:
-    """Every version a matrix axis can take, including inside an act-collapse expression.
+    """Every version a matrix axis can take, including inside a fromJSON expression.
 
-    ci.yml writes its axes as ``${{ vars.LOCAL_ACT && fromJSON('[...]') || fromJSON('[...]') }}``,
-    so the full set is the union of every ``fromJSON`` list in the expression.
+    If a workflow ever writes ``${{ vars.LOCAL_ACT && fromJSON('[...]') || fromJSON('[...]') }}``
+    (forbidden in this repo's ci.yml — see test_act_full_matrix), the full set is
+    still the union of every ``fromJSON`` list so classifier checks stay honest.
     """
     if isinstance(value, list):
         return {str(v) for v in value}
@@ -296,4 +297,6 @@ def test_ci_measures_coverage_against_a_floor() -> None:
     assert isinstance(floor.get("fail_under"), int) and floor["fail_under"] >= 85, floor
     ci = yaml.safe_load((WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
     runs = " ".join(str(s.get("run", "")) for s in ci["jobs"]["test"]["steps"])
-    assert "--cov=l3io.wp.database" in runs, "the test job no longer measures coverage"
+    assert "test-engine" in runs, "the test job no longer calls make test-engine"
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "--cov=l3io.wp.database" in makefile, "make test-engine no longer measures coverage"

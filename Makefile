@@ -1,16 +1,22 @@
 # Local equivalents of every CI gate. `make ci` replays the pipeline under act.
 #
-# Anything CI does that act cannot (artifact upload, and the clean-install job
-# that consumes the uploaded artifact) has a local substitute here, so no gate
-# is reachable only on a runner.
+# Owner rule (Shawn, 2026-11-08): work is not done until every GitHub job and
+# matrix leg is green; before any release/tag/publish, run the full workflow
+# locally with act (every Python, every engine, every job act can run). Jobs
+# act cannot run are named below — never skipped silently, never released while
+# CI is red.
+#
+# GitHub-only (act cannot): upload-artifact in ci.yml; the whole of
+# publish.yml / release.yml (no OIDC; act ignores job.permissions). Those two
+# are dry-run via `make ci-dryrun`. verify-install builds its own wheel so the
+# clean-install gate still runs under act.
 
 UV ?= uv
 ACT ?= act
-# --concurrent-jobs 1 is required locally, not a preference. act defaults to one
-# job per CPU and runs the job container with --network host, so every parallel
-# matrix leg's service container tries to bind host port 3306 and all but the
-# first fail with "port is already allocated". On GitHub each leg gets its own
-# runner, so the conflict does not exist there.
+# --concurrent-jobs 1 is required locally, not a preference. test and transfer
+# bind fixed host ports from steps (TEST_PORT / TRANSFER_PORT); act's default
+# parallelism would collide on those binds. On GitHub each leg has its own
+# runner. The full Python × engine matrix runs under act — do not narrow it.
 # -W pins act to ci.yml. act has no OIDC and ignores job.permissions, so it
 # must never pick up publish.yml; file separation plus this flag is the boundary.
 ACT_FLAGS ?= --var-file .act.vars --concurrent-jobs 1 -W .github/workflows/ci.yml
@@ -32,7 +38,7 @@ INFISICAL_PATH ?= /ci/act/l3io-wordpress-database
 ACT_RUNNER ?= $(INFISICAL) run --projectId $(INFISICAL_PROJECT) --env $(INFISICAL_ENV) --path $(INFISICAL_PATH) --
 
 .DEFAULT_GOAL := help
-.PHONY: help sync check lint format types test test-db test-transfer contracts namespace-check audit build verify-wheel ci ci-job ci-list ci-dryrun ci-dryrun-one clean
+.PHONY: help sync check lint format types test test-db test-engine test-transfer contracts namespace-check audit build verify-wheel ci ci-job ci-list ci-dryrun ci-dryrun-one clean
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -58,12 +64,36 @@ test-db: ## Integration tests against a server; set DB_HOST first
 	@test -n "$(DB_HOST)" || { echo "set DB_HOST (and DB_PORT/DB_ADMIN_USER/DB_ADMIN_PASSWORD)"; exit 1; }
 	$(UV) run pytest -q tests/test_integration.py
 
+# Host ports bound from steps (not workflow `services:`), so act does not
+# allocate them up front across the matrix. `make ci` keeps --concurrent-jobs 1
+# so legs serialize on these ports. Values match ci.yml L3IO_ACT_HOST_PORTS.
+TEST_PORT ?= 33398
 TRANSFER_PORT ?= 33399
 # Prebuilt abi3 wheel for l3io-age-passphrase (server images have no C compiler).
 BINDER_WHEEL_DIR ?= $(CURDIR)/.cache/age-passphrase-wheels
 BINDER_VERSION ?= 0.1.1
 # 0.1.1+ uses manylinux2014_*.manylinux_2_17_* order; 0.1.0 used the reverse.
 BINDER_WHEEL_URL ?= https://github.com/LiquidLogicLabs/l3io-age-passphrase/releases/download/v$(BINDER_VERSION)/l3io_age_passphrase-$(BINDER_VERSION)-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+
+test-engine: ## Full pytest against ENGINE server image (CI test job; act-safe)
+	@test -n "$(ENGINE)" || { echo "set ENGINE, e.g. make test-engine ENGINE=mysql:8.0"; exit 1; }
+	@set -eu; \
+	name="l3io-test-$$$$"; \
+	docker run -d --rm --name "$$name" -e MYSQL_ROOT_PASSWORD=root -e MARIADB_ROOT_PASSWORD=root \
+	  -p 127.0.0.1:$(TEST_PORT):3306 "$(ENGINE)" >/dev/null; \
+	trap 'docker rm -f "'"$$name"'" >/dev/null 2>&1' EXIT; \
+	trap 'exit 130' INT TERM; \
+	export DB_HOST=127.0.0.1 DB_PORT=$(TEST_PORT) DB_ADMIN_USER=root DB_ADMIN_PASSWORD=root; \
+	for _ in $$(seq 1 90); do \
+	  if $(UV) run --no-sync python -c "import os, pymysql; pymysql.connect(host=os.environ['DB_HOST'], port=int(os.environ['DB_PORT']), user='root', password='root').close()" 2>/dev/null; then \
+	    break; \
+	  fi; \
+	  sleep 2; \
+	done; \
+	$(UV) run --no-sync python -c "import os, pymysql; pymysql.connect(host=os.environ['DB_HOST'], port=int(os.environ['DB_PORT']), user='root', password='root').close()" >/dev/null; \
+	$(UV) run --no-sync pytest -q \
+	  --cov=l3io.wp.database --cov-report=term-missing \
+	  --cov-report=xml:$${COVERAGE_XML:-/tmp/l3io-coverage.xml}
 
 test-transfer: ## Export/import tests against ENGINE (a server image) using its own client tools
 	@test -n "$(ENGINE)" || { echo "set ENGINE, e.g. make test-transfer ENGINE=mysql:8.4"; exit 1; }

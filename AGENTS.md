@@ -60,9 +60,10 @@ Python 3.11+, uv, ruff, mypy --strict, PyMySQL. The spec and plans live in
 - `l3io-wordpress-config` is pinned to a git tag in `[tool.uv.sources]` and must never
   reach a release. `uv build --no-sources` strips it; a VCS dependency in
   published metadata makes the package unresolvable from PyPI.
-- Under act, database services are on `127.0.0.1`, not the service label — act
-  runs the job with `--network host`. The test matrix collapses to one leg via
-  `vars.LOCAL_ACT` because parallel legs collide on host port 3306.
+- Under act, databases started by `make test-engine` / `make test-transfer` listen
+  on `127.0.0.1` (TEST_PORT 33398 / TRANSFER_PORT 33399). Do not reintroduce
+  workflow `services:` for those jobs: act allocates service ports for every
+  matrix leg up front and collides on a shared 3306.
 
 ## Known pitfalls
 
@@ -71,12 +72,25 @@ Python 3.11+, uv, ruff, mypy --strict, PyMySQL. The spec and plans live in
 
 <!-- /bmad:context -->
 
+## Owner rule — CI and releases (Shawn, 2026-11-08)
+
+Family-wide. Applies to this repo and to backup/config/passphrase:
+
+1. Work is not done until GitHub CI is completely green: every job and every
+   matrix leg, including clean install.
+2. Before any release, tag, or publish, run the full workflow locally with act
+   (`make ci`): every Python, every database engine, every job act can run.
+   Anything act cannot run must be named (here: `upload-artifact`; all of
+   `publish.yml` / `release.yml` — dry-run with `make ci-dryrun`), not skipped
+   silently.
+3. Never release or publish while CI is red. Gate releases on a green local act
+   run and green GitHub CI.
+
+`vars.LOCAL_ACT` must not narrow matrices. `make ci` uses `--concurrent-jobs 1`
+so the full matrix can share the step-bound host ports.
+
 ## Interim (plan-4)
 
 - `pyrage` is also git-pinned under `[tool.uv.sources]` (fork tip with
   `passphrase.encrypt_io` / `decrypt_io`) until upstream PyPI ships those APIs.
   Same strip-before-publish rule as config; see handoff 0.2.0 feature section.
-- Act collapse (F1.4): only the `test` job collapses under `vars.LOCAL_ACT`
-  (services on 3306). `verify-install` and `transfer` keep the full matrix;
-  transfer binds host `33399` from the step and relies on `--concurrent-jobs 1`
-  (declared as job env `L3IO_ACT_HOST_PORTS`).

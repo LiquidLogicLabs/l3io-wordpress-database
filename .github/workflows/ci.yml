@@ -115,31 +115,21 @@ jobs:
         run: uv run pytest tests/test_identifiers.py -q
 
   test:
+    # Full Python × engine matrix under act and on GitHub. No `services:` block:
+    # act allocates service ports for every matrix leg up front, so a shared
+    # 3306 collapses the matrix or fails with "port is already allocated".
+    # `make test-engine` binds TEST_PORT (33398) from the step instead, and
+    # `make ci`'s --concurrent-jobs 1 serializes those binds. Owner rule
+    # 2026-11-08: never narrow this matrix under LOCAL_ACT.
     name: py${{ matrix.python }} · ${{ matrix.engine.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # Under act the matrix collapses to one representative leg, driven by
-        # vars.LOCAL_ACT rather than by `if:` branching -- one code path, two
-        # inputs. Not a convenience: act creates every leg's service container
-        # up front and runs the job container with --network host, so N legs
-        # all try to bind host port 3306 and N-1 fail with "port is already
-        # allocated". --concurrent-jobs 1 does not help, because the allocation
-        # happens before any job starts. On GitHub each leg has its own runner.
-        #
-        # Config keeps all four Pythons under act because it has no DB services.
-        # Here each Python × engine cell still gets its own service, so collapsing
-        # the engine alone is not enough -- Python collapses too.
-        python: >-
-          ${{ vars.LOCAL_ACT && fromJSON('["3.11"]')
-              || fromJSON('["3.11","3.12","3.13","3.14"]') }}
-        # The engine carries its own image and health probe as one object, so
-        # there is no `include:` block. An include entry whose keys do not match
-        # an existing combination ADDS a leg rather than extending one, which
-        # silently produced legs with no python value when the engine list was
-        # collapsed above. Keeping the data in the matrix value makes that
-        # impossible.
+        python: ['3.11', '3.12', '3.13', '3.14']
+        # The engine carries name + image as one object so there is no
+        # `include:` block. An include entry whose keys do not match an
+        # existing combination ADDS a leg rather than extending one.
         #
         # 8.0 is the only server where mysql_native_password is still active, so
         # an 8.4-only matrix never exercises the auth-plugin divergence the
@@ -152,42 +142,26 @@ jobs:
         # mariadb:10.2 is the supported floor's leg, not a popularity pick. Verified
         # 2026-10-12: 10.1.48 rejects ALTER USER with ERROR 1064 and fails six of
         # the thirteen integration tests; 10.2.44 passes all thirteen. This leg is
-        # what keeps that floor true rather than remembered.
-        # Its probe is mysqladmin, not healthcheck.sh: the 10.2 image's script has
-        # no credentials file and fails with ERROR 1045. A TCP ping is not early,
-        # because the entrypoint's bootstrap server listens on the socket only.
-        engine: >-
-          ${{ vars.LOCAL_ACT
-              && fromJSON('[{"name":"mysql80","image":"mysql:8.0","health":"mysqladmin ping -h 127.0.0.1 -uroot -proot"}]')
-              || fromJSON('[{"name":"mysql80","image":"mysql:8.0","health":"mysqladmin ping -h 127.0.0.1 -uroot -proot"},{"name":"mysql84","image":"mysql:8.4","health":"mysqladmin ping -h 127.0.0.1 -uroot -proot"},{"name":"mysql97","image":"mysql:9.7","health":"mysqladmin ping -h 127.0.0.1 -uroot -proot"},{"name":"mariadb","image":"mariadb:11.4","health":"healthcheck.sh --connect --innodb_initialized"},{"name":"mariadb102","image":"mariadb:10.2","health":"mysqladmin ping -h 127.0.0.1 -uroot -proot"}]') }}
-    services:
-      db:
-        image: ${{ matrix.engine.image }}
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MARIADB_ROOT_PASSWORD: root
-        ports: ['3306:3306']
-        options: >-
-          --health-cmd="${{ matrix.engine.health }}"
-          --health-interval=5s --health-timeout=5s
-          --health-retries=20 --health-start-period=30s
+        # what keeps that floor true rather than remembered. Readiness is a TCP
+        # PyMySQL connect in make test-engine (not healthcheck.sh): the 10.2
+        # image's script has no credentials file, and the entrypoint's bootstrap
+        # server listens on the socket only.
+        engine:
+          - {name: mysql80, image: mysql:8.0}
+          - {name: mysql84, image: mysql:8.4}
+          - {name: mysql97, image: mysql:9.7}
+          - {name: mariadb, image: mariadb:11.4}
+          - {name: mariadb102, image: mariadb:10.2}
     env:
-      # 127.0.0.1 on BOTH GitHub and act, so .act.vars deliberately leaves
-      # DB_HOST unset and this default applies in both places. act's default
-      # network is `host` (`--network` defaults to "host"), so a service LABEL
-      # fails DNS outright and the published port appears on the loopback
-      # address -- the same place GitHub's VM runner puts it. Do NOT set
-      # DB_HOST=db: that only applies if act is given a user-defined network.
-      DB_HOST: ${{ vars.DB_HOST || '127.0.0.1' }}
-      DB_PORT: '3306'
-      DB_ADMIN_USER: root
-      DB_ADMIN_PASSWORD: root
       UV_PROJECT_ENVIRONMENT: /tmp/l3io-venv-py${{ matrix.python }}-${{ matrix.engine.name }}
       # Same rule as the venv: nothing a job writes may land in the working
       # tree. act binds the developer's checkout and runs as root, so a
       # .coverage written there is root-owned afterwards and shared by every
       # leg running at once.
       COVERAGE_FILE: /tmp/l3io-coverage-py${{ matrix.python }}-${{ matrix.engine.name }}
+      COVERAGE_XML: /tmp/l3io-coverage-py${{ matrix.python }}-${{ matrix.engine.name }}.xml
+      # Host port make test-engine binds; matches Makefile TEST_PORT.
+      L3IO_ACT_HOST_PORTS: '33398'
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }  # hatch-vcs needs tags; shallow yields 0.1.devN
@@ -197,15 +171,11 @@ jobs:
           python-version: ${{ matrix.python }}
           enable-cache: ${{ !vars.LOCAL_ACT }}
       - run: uv sync --locked --all-extras --dev
-      - name: pytest
-        # DB_HOST is set, so the integration tests run rather than skip. They
-        # cover the portable CREATE USER / ALTER USER / GRANT sequence on every
-        # engine, idempotence with zero writes on a second run, password
-        # convergence, and the AD-28 reachability proof.
-        run: >-
-          uv run pytest -q
-          --cov=l3io.wp.database --cov-report=term-missing
-          --cov-report=xml:/tmp/l3io-coverage-py${{ matrix.python }}-${{ matrix.engine.name }}.xml
+      - name: pytest against engine
+        # Integration tests cover the portable CREATE USER / ALTER USER / GRANT
+        # sequence on every engine, idempotence with zero writes on a second
+        # run, password convergence, and the AD-28 reachability proof.
+        run: make test-engine ENGINE='${{ matrix.engine.image }}'
 
   transfer:
     # Export and import against each engine, using the client tools that ship
@@ -216,10 +186,9 @@ jobs:
     # No `services:` block: the job binds host port TRANSFER_PORT (33399) from
     # inside the step via `docker run -p`. That is not allocated up front by
     # act, and `make ci`'s ACT_FLAGS include `--concurrent-jobs 1`, so legs run
-    # one at a time and the Makefile trap removes the container on exit. The
-    # engine axis is therefore NOT collapsed under LOCAL_ACT — collapsing would
-    # be a speed choice, not a forced one. A bare `act` without
-    # --concurrent-jobs 1 would collide on 33399; that is why Makefile pins it.
+    # one at a time and the Makefile trap removes the container on exit. A bare
+    # `act` without --concurrent-jobs 1 would collide on 33399; that is why
+    # Makefile pins it.
     name: transfer · ${{ matrix.engine }}
     runs-on: ubuntu-latest
     needs: [static]
@@ -227,9 +196,8 @@ jobs:
       fail-fast: false
       matrix:
         engine: ['mysql:8.0', 'mysql:8.4', 'mysql:9.7', 'mariadb:10.2', 'mariadb:11.4']
-    # Declares a host port this job binds outside of `services:`, so the family
-    # CI/CD checker can treat it like a service port if a future collapse is
-    # reintroduced. Value matches Makefile TRANSFER_PORT.
+    # Declares a host port this job binds outside of `services:`. Value matches
+    # Makefile TRANSFER_PORT.
     env:
       L3IO_ACT_HOST_PORTS: '33399'
     steps:
@@ -306,8 +274,7 @@ jobs:
     strategy:
       fail-fast: false
       # No services and no host-port bind: under act this job only builds and
-      # installs a wheel. Collapsing Python under LOCAL_ACT is not justified
-      # (F1.4); replay all four versions locally the same way GitHub does.
+      # installs a wheel. Full Python matrix locally and on GitHub.
       matrix:
         python: ['3.11', '3.12', '3.13', '3.14']
     env:
