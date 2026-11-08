@@ -10,7 +10,8 @@ set -euo pipefail
 
 wheel=${1:?usage: verify_extras.sh WHEEL [PYTHON]}
 python=${2:-}
-config_wheel=${WPCONFIG_WHEEL:-https://github.com/LiquidLogicLabs/l3io-wordpress-config/releases/download/v0.1.0/l3io_wordpress_config-0.1.0-py3-none-any.whl}
+# Keep in lockstep with pyproject wpconfig pin (>=0.1.2,<0.2) and uv.sources tag.
+config_wheel=${WPCONFIG_WHEEL:-https://github.com/LiquidLogicLabs/l3io-wordpress-config/releases/download/v0.1.3/l3io_wordpress_config-0.1.3-py3-none-any.whl}
 pkg_url="file://$(realpath "$wheel")"
 
 isolated() {
