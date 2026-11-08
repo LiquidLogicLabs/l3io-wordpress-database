@@ -58,8 +58,9 @@ def _server_is_mariadb() -> bool:
     )
     with conn, conn.cursor() as cur:
         cur.execute("SELECT VERSION()")
-        version = str(cur.fetchone()[0])
-    return "mariadb" in version.casefold()
+        row = cur.fetchone()
+    assert row is not None
+    return "mariadb" in str(row[0]).casefold()
 
 
 def _admin(*statements: str) -> None:
