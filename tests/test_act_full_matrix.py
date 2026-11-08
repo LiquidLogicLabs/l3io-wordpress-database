@@ -28,8 +28,7 @@ def test_ci_matrices_are_not_narrowed_under_local_act() -> None:
             if isinstance(value, str) and "LOCAL_ACT" in value:
                 offenders.append(f"{job_id}.matrix.{axis}")
     assert not offenders, (
-        "LOCAL_ACT must not narrow matrices (owner rule 2026-11-08); "
-        f"offenders: {offenders}"
+        f"LOCAL_ACT must not narrow matrices (owner rule 2026-11-08); offenders: {offenders}"
     )
 
 
