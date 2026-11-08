@@ -139,10 +139,12 @@ def test_real_client_print_defaults_accepts_family_tls_options(
     binaries: tuple[str, ...],
     must_accept: tuple[str, ...],
 ) -> None:
-    """Family TLS lines must parse; foreign names must fail when the client removed them.
+    """Family TLS lines must parse on the real client (no ``loose-``).
 
-    MySQL 8.0 still accepts deprecated ``ssl=1``; only 8.4+ rejects it. MariaDB
-    rejects ``ssl-mode``. Always assert the family's own lines are accepted.
+    Always assert ``must_accept``. MariaDB must reject ``ssl-mode``. Do not
+    assert that MySQL rejects ``ssl=1``: 8.0 still accepts it as deprecated, and
+    some host packages that report 8.4+ still accept it under ``--print-defaults``
+    even though the 8.4 client used in restore rejects it at connect time.
     """
     binary = _client_on_path(*binaries)
     if binary is None:
@@ -154,8 +156,7 @@ def test_real_client_print_defaults_accepts_family_tls_options(
         env=_client.child_env(),
         check=False,
     )
-    banner_text = version.stdout or version.stderr
-    banner = banner_text.lower()
+    banner = (version.stdout or version.stderr).lower()
     if family is ServerFamily.MYSQL and "mariadb" in banner:
         pytest.skip(f"{binary} is a MariaDB client; need a MySQL client for this case")
     if (
@@ -177,27 +178,21 @@ def test_real_client_print_defaults_accepts_family_tls_options(
     assert accepted.returncode == 0, accepted.stderr
     assert "unknown variable" not in accepted.stderr.lower()
 
-    must_reject: tuple[str, ...]
-    if family is ServerFamily.MARIADB:
-        must_reject = ("ssl-mode=VERIFY_IDENTITY",)
-    else:
-        tool = _client.parse_client_version(Path(binary).name, binary, banner_text)
-        # MySQL 8.0 still accepts deprecated ssl=1; 8.4 removed it (sidecar failure).
-        must_reject = ("ssl=1",) if tool.version >= (8, 4, 0) else ()
+    if family is not ServerFamily.MARIADB:
+        return
 
-    for bad_line in must_reject:
-        bad = tmp_path / f"bad-{bad_line.split('=')[0]}.cnf"
-        bad.write_text(f"[client]\n{bad_line}\n")
-        rejected = subprocess.run(  # noqa: S603
-            [binary, f"--defaults-file={bad}", "--print-defaults"],
-            capture_output=True,
-            text=True,
-            env=_client.child_env(),
-            check=False,
-        )
-        err = (rejected.stderr + rejected.stdout).lower()
-        assert rejected.returncode != 0, f"{binary} accepted foreign option {bad_line!r}"
-        assert "unknown variable" in err or "unknown option" in err, err
+    bad = tmp_path / "bad-ssl-mode.cnf"
+    bad.write_text("[client]\nssl-mode=VERIFY_IDENTITY\n")
+    rejected = subprocess.run(  # noqa: S603
+        [binary, f"--defaults-file={bad}", "--print-defaults"],
+        capture_output=True,
+        text=True,
+        env=_client.child_env(),
+        check=False,
+    )
+    err = (rejected.stderr + rejected.stdout).lower()
+    assert rejected.returncode != 0, f"{binary} accepted foreign option 'ssl-mode'"
+    assert "unknown variable" in err or "unknown option" in err, err
 
 
 def test_classify_tls_failure() -> None:
