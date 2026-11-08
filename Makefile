@@ -61,18 +61,19 @@ test-db: ## Integration tests against a server; set DB_HOST first
 TRANSFER_PORT ?= 33399
 # Prebuilt abi3 wheel for l3io-age-passphrase (server images have no C compiler).
 BINDER_WHEEL_DIR ?= $(CURDIR)/.cache/age-passphrase-wheels
-BINDER_VERSION ?= 0.1.0
-BINDER_WHEEL_URL ?= https://github.com/LiquidLogicLabs/l3io-age-passphrase/releases/download/v$(BINDER_VERSION)/l3io_age_passphrase-$(BINDER_VERSION)-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+BINDER_VERSION ?= 0.1.1
+# 0.1.1+ uses manylinux2014_*.manylinux_2_17_* order; 0.1.0 used the reverse.
+BINDER_WHEEL_URL ?= https://github.com/LiquidLogicLabs/l3io-age-passphrase/releases/download/v$(BINDER_VERSION)/l3io_age_passphrase-$(BINDER_VERSION)-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
 
 test-transfer: ## Export/import tests against ENGINE (a server image) using its own client tools
 	@test -n "$(ENGINE)" || { echo "set ENGINE, e.g. make test-transfer ENGINE=mysql:8.4"; exit 1; }
 	@set -eu; \
 	mkdir -p "$(BINDER_WHEEL_DIR)"; \
-	wheel=$$(ls "$(BINDER_WHEEL_DIR)"/l3io_age_passphrase-*.whl 2>/dev/null | head -1 || true); \
+	wheel=$$(ls "$(BINDER_WHEEL_DIR)"/l3io_age_passphrase-$(BINDER_VERSION)-*.whl 2>/dev/null | head -1 || true); \
 	if [ -z "$$wheel" ]; then \
-	  echo "fetching l3io-age-passphrase wheel for transfer container"; \
+	  echo "fetching l3io-age-passphrase $(BINDER_VERSION) wheel for transfer container"; \
 	  curl -fsSL -o "$(BINDER_WHEEL_DIR)/$$(basename "$(BINDER_WHEEL_URL)")" "$(BINDER_WHEEL_URL)"; \
-	  wheel=$$(ls "$(BINDER_WHEEL_DIR)"/l3io_age_passphrase-*.whl | head -1); \
+	  wheel=$$(ls "$(BINDER_WHEEL_DIR)"/l3io_age_passphrase-$(BINDER_VERSION)-*.whl | head -1); \
 	fi; \
 	base=$$(basename "$$wheel"); \
 	name="l3io-transfer-$$$$"; \

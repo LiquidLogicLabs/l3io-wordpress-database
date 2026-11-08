@@ -21,15 +21,17 @@ binder_wheel=${AGE_PASSPHRASE_WHEEL:-}
 if [ -z "$binder_wheel" ]; then
   # mkdir before realpath: realpath fails when the path does not exist yet
   # (CI runners have no .cache/; .gitignore excludes it).
+  # Keep in lockstep with pyproject encryption pin (>=0.1.1,<0.2).
+  ver=${BINDER_VERSION:-0.1.1}
+  # 0.1.1+ uses manylinux2014_*.manylinux_2_17_* order; 0.1.0 used the reverse.
   cache_dir="$(dirname "$0")/../.cache/age-passphrase-wheels"
   mkdir -p "$cache_dir"
   cache="$(realpath "$cache_dir")"
-  binder_wheel=$(ls "$cache"/l3io_age_passphrase-*.whl 2>/dev/null | head -1 || true)
+  binder_wheel=$(ls "$cache"/l3io_age_passphrase-${ver}-*.whl 2>/dev/null | head -1 || true)
   if [ -z "$binder_wheel" ]; then
-    ver=${BINDER_VERSION:-0.1.0}
-    binder_download=${BINDER_WHEEL_URL:-https://github.com/LiquidLogicLabs/l3io-age-passphrase/releases/download/v${ver}/l3io_age_passphrase-${ver}-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl}
+    binder_download=${BINDER_WHEEL_URL:-https://github.com/LiquidLogicLabs/l3io-age-passphrase/releases/download/v${ver}/l3io_age_passphrase-${ver}-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl}
     curl -fsSL -o "$cache/$(basename "$binder_download")" "$binder_download"
-    binder_wheel=$(ls "$cache"/l3io_age_passphrase-*.whl | head -1)
+    binder_wheel=$(ls "$cache"/l3io_age_passphrase-${ver}-*.whl | head -1)
   fi
 fi
 binder_url="file://$(realpath "$binder_wheel")"
