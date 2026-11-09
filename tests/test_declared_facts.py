@@ -298,5 +298,5 @@ def test_ci_measures_coverage_against_a_floor() -> None:
     ci = yaml.safe_load((WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
     runs = " ".join(str(s.get("run", "")) for s in ci["jobs"]["test"]["steps"])
     assert "test-engine" in runs, "the test job no longer calls make test-engine"
-    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
-    assert "--cov=l3io.wp.database" in makefile, "make test-engine no longer measures coverage"
+    engine_sh = (REPO_ROOT / "tools" / "test-engine.sh").read_text(encoding="utf-8")
+    assert "--cov=l3io.wp.database" in engine_sh, "test-engine.sh no longer measures coverage"
