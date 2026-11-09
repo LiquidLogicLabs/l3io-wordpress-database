@@ -118,13 +118,18 @@ jobs:
     # Full Python × engine matrix under act and on GitHub. No `services:` block:
     # act allocates service ports for every matrix leg up front, so a shared
     # 3306 collapses the matrix or fails with "port is already allocated".
-    # `make test-engine` binds TEST_PORT (33398) from the step instead, and
-    # `make ci`'s --concurrent-jobs 1 serializes those binds. Owner rule
-    # 2026-11-08: never narrow this matrix under LOCAL_ACT.
+    # `make test-engine` binds an ephemeral loopback port from the step.
+    #
+    # act's --concurrent-jobs caps JOBS, not matrix legs (act 0.2.89 defaults
+    # max-parallel to 4). Under LOCAL_ACT, force max-parallel: 1 so legs cannot
+    # overlap host docker binds; GitHub keeps a high limit. Flock in
+    # tools/test-engine.sh is belt-and-suspenders. Owner rule 2026-11-08: never
+    # narrow this matrix under LOCAL_ACT.
     name: py${{ matrix.python }} · ${{ matrix.engine.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: ${{ vars.LOCAL_ACT && 1 || 256 }}
       matrix:
         python: ['3.11', '3.12', '3.13', '3.14']
         # The engine carries name + image as one object so there is no
@@ -160,8 +165,9 @@ jobs:
       # leg running at once.
       COVERAGE_FILE: /tmp/l3io-coverage-py${{ matrix.python }}-${{ matrix.engine.name }}
       COVERAGE_XML: /tmp/l3io-coverage-py${{ matrix.python }}-${{ matrix.engine.name }}.xml
-      # Host port make test-engine binds; matches Makefile TEST_PORT.
-      L3IO_ACT_HOST_PORTS: '33398'
+      # Declares that this job binds a host port outside services: (ephemeral
+      # under act; flock + max-parallel:1 under LOCAL_ACT serialize it).
+      L3IO_ACT_HOST_PORTS: 'ephemeral'
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }  # hatch-vcs needs tags; shallow yields 0.1.devN
@@ -192,23 +198,20 @@ jobs:
     # container of the server image, started by `make test-transfer`, so the
     # same command runs here, under act, and on a developer's machine.
     #
-    # No `services:` block: the job binds host port TRANSFER_PORT (33399) from
-    # inside the step via `docker run -p`. That is not allocated up front by
-    # act, and `make ci`'s ACT_FLAGS include `--concurrent-jobs 1`, so legs run
-    # one at a time and the Makefile trap removes the container on exit. A bare
-    # `act` without --concurrent-jobs 1 would collide on 33399; that is why
-    # Makefile pins it.
+    # No `services:` block: tools/test-transfer.sh binds an ephemeral host
+    # port from the step. act's --concurrent-jobs does not serialize matrix
+    # legs — max-parallel: 1 under LOCAL_ACT does (see test job). Flock in the
+    # script is belt-and-suspenders.
     name: transfer · ${{ matrix.engine }}
     runs-on: ubuntu-latest
     needs: [static]
     strategy:
       fail-fast: false
+      max-parallel: ${{ vars.LOCAL_ACT && 1 || 256 }}
       matrix:
         engine: ['mysql:8.0', 'mysql:8.4', 'mysql:9.7', 'mariadb:10.2', 'mariadb:11.4']
-    # Declares a host port this job binds outside of `services:`. Value matches
-    # Makefile TRANSFER_PORT.
     env:
-      L3IO_ACT_HOST_PORTS: '33399'
+      L3IO_ACT_HOST_PORTS: 'ephemeral'
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }  # hatch-vcs needs tags; shallow yields 0.1.devN

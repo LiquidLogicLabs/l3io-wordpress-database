@@ -1,8 +1,9 @@
 """Act must replay the full CI matrix — never a LOCAL_ACT-narrowed subset.
 
 Owner rule (Shawn, 2026-11-08): narrowed local matrices are how engine-specific
-failures escape. The test job starts databases from steps (like transfer), so
-act can run every Python × engine cell with --concurrent-jobs 1.
+failures escape. The test job starts databases from steps (like transfer).
+act's --concurrent-jobs caps jobs, not matrix legs (default max-parallel 4), so
+port-binding jobs must set max-parallel: 1 under LOCAL_ACT.
 """
 
 from __future__ import annotations
@@ -13,6 +14,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CI = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+
+#: Jobs that bind a host port from a step and therefore must not overlap under act.
+_PORT_BINDING_JOBS = ("test", "transfer")
 
 
 def test_ci_matrices_are_not_narrowed_under_local_act() -> None:
@@ -30,6 +34,22 @@ def test_ci_matrices_are_not_narrowed_under_local_act() -> None:
     assert not offenders, (
         f"LOCAL_ACT must not narrow matrices (owner rule 2026-11-08); offenders: {offenders}"
     )
+
+
+def test_port_binding_jobs_serialize_matrix_legs_under_local_act() -> None:
+    """act defaults max-parallel to 4; --concurrent-jobs does not override that."""
+    document = yaml.safe_load(CI.read_text(encoding="utf-8"))
+    text = CI.read_text(encoding="utf-8")
+    for job_id in _PORT_BINDING_JOBS:
+        strategy = document["jobs"][job_id]["strategy"]
+        assert "matrix" in strategy, f"{job_id} has no matrix"
+        # yaml may parse the expression as a string, or leave it only in raw text
+        raw = strategy.get("max-parallel")
+        assert raw is not None or "max-parallel:" in text, f"{job_id} lacks max-parallel"
+        assert "vars.LOCAL_ACT && 1" in text, (
+            f"{job_id} must set max-parallel to 1 under LOCAL_ACT "
+            "(act overlaps matrix legs despite --concurrent-jobs)"
+        )
 
 
 def test_test_job_starts_database_from_a_step_not_services() -> None:

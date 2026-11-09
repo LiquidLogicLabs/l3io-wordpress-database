@@ -88,8 +88,10 @@ Family-wide. Applies to this repo and to backup/config/passphrase:
    without every GitHub run for HEAD's full SHA completed as `success`.
    Dispatching `release.yml` by hand bypasses both checks.
 
-`vars.LOCAL_ACT` must not narrow matrices. `make ci` uses `--concurrent-jobs 1`
-so the full matrix can share the step-bound host ports.
+`vars.LOCAL_ACT` must not narrow matrices. act's `--concurrent-jobs` caps jobs,
+not matrix legs (default `max-parallel` is 4); `ci.yml` sets `max-parallel: 1`
+under `LOCAL_ACT` on port-binding jobs, and `tools/test-*.sh` flock + bind
+ephemeral loopback ports.
 
 ## Interim (plan-4)
 

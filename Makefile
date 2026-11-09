@@ -13,10 +13,10 @@
 
 UV ?= uv
 ACT ?= act
-# --concurrent-jobs 1 is required locally, not a preference. test and transfer
-# bind fixed host ports from steps (TEST_PORT / TRANSFER_PORT); act's default
-# parallelism would collide on those binds. On GitHub each leg has its own
-# runner. The full Python × engine matrix runs under act — do not narrow it.
+# --concurrent-jobs 1 caps JOBS, not matrix legs (act 0.2.89 max-parallel
+# defaults to 4). ci.yml sets max-parallel: 1 under LOCAL_ACT on test/transfer;
+# tools/test-*.sh also flock + bind ephemeral ports. On GitHub each leg has its
+# own runner. The full Python × engine matrix runs under act — do not narrow it.
 # -W pins act to ci.yml. act has no OIDC and ignores job.permissions, so it
 # must never pick up publish.yml; file separation plus this flag is the boundary.
 ACT_FLAGS ?= --var-file .act.vars --concurrent-jobs 1 -W .github/workflows/ci.yml
