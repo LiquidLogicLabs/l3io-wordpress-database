@@ -12,7 +12,7 @@ from .credentials import CredentialSource
 from .inspection import Survey
 from .provision import EnsureResult, OperationResult
 from .state import ConnectionState
-from .transfer import DumpStream, TransferResult
+from .transfer import DropTablesResult, DumpStream, TransferResult
 from .verdict import Verdict
 from .versions import SchemaVersion
 
@@ -128,6 +128,12 @@ class Database:
     def check_dump(self, credentials: CredentialSource, *, options: Sequence[str] = ()) -> Verdict:
         return transfer.check_dump(self._connection, credentials, options=options)
 
+    def check_drop_tables(self, credentials: CredentialSource, *, prefix: str) -> DropTablesResult:
+        return transfer.check_drop_tables(self._connection, credentials, prefix=prefix)
+
+    def drop_tables(self, credentials: CredentialSource, *, prefix: str) -> DropTablesResult:
+        return transfer.drop_tables(self._connection, credentials, prefix=prefix)
+
     def iter_dump(
         self,
         credentials: CredentialSource,
@@ -168,6 +174,7 @@ class Database:
         *,
         source: str | os.PathLike[str] | None = None,
         replace: str | None = None,
+        prune_prefix: str | None = None,
         identities: Sequence[str] | None = None,
         passphrase: str | None = None,
         options: Sequence[str] = (),
@@ -178,6 +185,7 @@ class Database:
             credentials,
             source=source,
             replace=replace,
+            prune_prefix=prune_prefix,
             identities=identities,
             passphrase=passphrase,
             options=options,
@@ -190,6 +198,7 @@ class Database:
         source: IO[bytes] | Iterable[bytes] | str | os.PathLike[str],
         *,
         replace: str | None = None,
+        prune_prefix: str | None = None,
         identities: Sequence[str] | None = None,
         passphrase: str | None = None,
         options: Sequence[str] = (),
@@ -200,6 +209,7 @@ class Database:
             credentials,
             source,
             replace=replace,
+            prune_prefix=prune_prefix,
             identities=identities,
             passphrase=passphrase,
             options=options,

@@ -29,9 +29,17 @@ import pymysql
 from . import _client
 from ._client import ClientTool
 from ._observe import VERDICT_KEY, Running, operation
+from ._sql import open_connection
 from .connection import Connection
 from .credentials import CredentialSource, ResolvedCredentials
-from .errors import DatabaseUnreachableError, InvalidArgumentsError, RefusedError, TransferError
+from .errors import (
+    DatabaseError,
+    DatabaseUnreachableError,
+    InvalidArgumentsError,
+    RefusedError,
+    TransferError,
+)
+from .identifiers import grant_pattern, quote_identifier
 from .provision import _as_package_error, _confirmation, _preflight_resolved, _resolve_or_finding
 from .server import ServerFamily, ServerInfo, detect_server
 from .verdict import Code, Finding, Verdict
@@ -44,6 +52,13 @@ DEV_FD = Path("/dev/fd")
 
 DUMP_PRIVILEGES = ("SELECT", "SHOW VIEW", "TRIGGER")
 LOAD_PRIVILEGES = ("CREATE", "INSERT", "ALTER", "DROP", "INDEX", "REFERENCES", "CREATE VIEW")
+DROP_TABLES_PRIVILEGES = ("DROP",)
+
+#: Same character set as :func:`identifiers.validate_database_name`, applied to a
+#: table-name prefix that will be LIKE-matched and then used only to select
+#: already-quoted identifiers for ``DROP``.
+_PREFIX_FORBIDDEN = frozenset({"\x00", "\n", "\r", "`", "/", "\\", "."})
+MAX_TABLE_PREFIX = 64
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +69,15 @@ class TransferResult:
     duration_ms: float
     tool: str
     server: ServerInfo
+    verdict: Verdict
+    dropped: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class DropTablesResult:
+    """Tables matching a prefix, and what the check found."""
+
+    tables: tuple[str, ...]
     verdict: Verdict
 
 
@@ -892,18 +916,147 @@ def _load_plan(
     return _Plan(verdict.with_findings(*extra), resolved, tool, server)
 
 
+def validate_table_prefix(prefix: str) -> str:
+    """Return ``prefix`` if it is safe to LIKE-match and drop against, else raise."""
+    if not isinstance(prefix, str) or not prefix:
+        msg = "table prefix must be a non-empty string"
+        raise InvalidArgumentsError(msg)
+    if len(prefix) > MAX_TABLE_PREFIX:
+        msg = f"table prefix longer than {MAX_TABLE_PREFIX} characters"
+        raise InvalidArgumentsError(msg)
+    if prefix != prefix.strip():
+        msg = "table prefix has leading or trailing whitespace"
+        raise InvalidArgumentsError(msg)
+    found = _PREFIX_FORBIDDEN.intersection(prefix)
+    if found:
+        chars = ", ".join(repr(c) for c in sorted(found))
+        msg = f"table prefix contains forbidden characters: {chars}"
+        raise InvalidArgumentsError(msg)
+    return prefix
+
+
+def _prefix_like(prefix: str) -> str:
+    """``prefix`` as a LIKE pattern that matches only names starting with it literally."""
+    return grant_pattern(prefix) + "%"
+
+
+def _list_prefix_objects(cur: Any, database: str, prefix: str) -> list[tuple[str, str]]:
+    """``(name, TABLE_TYPE)`` for base tables and views under ``prefix``, views first."""
+    cur.execute(
+        "SELECT TABLE_NAME, TABLE_TYPE FROM information_schema.TABLES "
+        "WHERE TABLE_SCHEMA = %s AND TABLE_TYPE IN ('BASE TABLE', 'VIEW') "
+        "AND TABLE_NAME LIKE %s ESCAPE %s "
+        "ORDER BY CASE TABLE_TYPE WHEN 'VIEW' THEN 0 ELSE 1 END, TABLE_NAME",
+        (database, _prefix_like(prefix), "\\"),
+    )
+    return [(str(name), str(kind)) for name, kind in cur.fetchall()]
+
+
+def _drop_prefix_objects(cur: Any, database: str, prefix: str) -> tuple[str, ...]:
+    """Drop matching views then base tables; return the names dropped, in that order."""
+    rows = _list_prefix_objects(cur, database, prefix)
+    dropped: list[str] = []
+    for name, kind in rows:
+        statement = "VIEW" if kind == "VIEW" else "TABLE"
+        cur.execute(
+            f"DROP {statement} IF EXISTS "  # noqa: S608 - quoted identifiers only
+            f"{quote_identifier(database)}.{quote_identifier(name)}"
+        )
+        dropped.append(name)
+    return tuple(dropped)
+
+
+def _drop_tables_plan(
+    connection: Connection, credentials: CredentialSource, prefix: str
+) -> tuple[Verdict, ResolvedCredentials | None, tuple[str, ...], Any | None]:
+    """Preflight plus the matching table/view list. Session is open when the verdict is ok."""
+    prefix = validate_table_prefix(prefix)
+    resolved = _resolve_or_finding(credentials)
+    if isinstance(resolved, Finding):
+        return Verdict("drop_tables", (resolved,)), None, (), None
+    verdict, session = _preflight_resolved(
+        connection, resolved, "drop_tables", DROP_TABLES_PRIVILEGES
+    )
+    if session is None:
+        return verdict, resolved, (), None
+    database = connection.database
+    try:
+        with session.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = %s",
+                (database,),
+            )
+            exists = int(cur.fetchone()[0]) > 0
+            tables: tuple[str, ...] = ()
+            if exists:
+                tables = tuple(name for name, _ in _list_prefix_objects(cur, database, prefix))
+            else:
+                verdict = verdict.with_findings(
+                    Finding(Code.DATABASE_ABSENT, f"{database!r} does not exist")
+                )
+    except pymysql.err.MySQLError as exc:
+        session.close()
+        raise _as_package_error(exc, DatabaseUnreachableError) from exc
+    if not verdict.ok:
+        session.close()
+        return verdict, resolved, tables, None
+    return verdict, resolved, tables, session
+
+
+def check_drop_tables(
+    connection: Connection, credentials: CredentialSource, *, prefix: str
+) -> DropTablesResult:
+    """What :func:`drop_tables` would drop. ``tables`` is the match list."""
+    with operation("check_drop_tables", connection) as fields:
+        verdict, _, tables, session = _drop_tables_plan(connection, credentials, prefix)
+        if session is not None:
+            session.close()
+        fields[VERDICT_KEY] = verdict
+        fields["tables"] = len(tables)
+        return DropTablesResult(tables, verdict)
+
+
+def drop_tables(
+    connection: Connection, credentials: CredentialSource, *, prefix: str
+) -> DropTablesResult:
+    """Drop every base table and view in this database whose name starts with ``prefix``.
+
+    ``_`` and ``%`` in ``prefix`` are matched literally. Names that do not start
+    with the prefix are never touched. An empty or invalid prefix is refused.
+    """
+    with operation("drop_tables", connection) as fields:
+        verdict, _, _, session = _drop_tables_plan(connection, credentials, prefix)
+        if session is None:
+            raise RefusedError(verdict)
+        try:
+            with session, session.cursor() as cur:
+                dropped = _drop_prefix_objects(
+                    cur, connection.database, validate_table_prefix(prefix)
+                )
+                session.commit()
+        except pymysql.err.MySQLError as exc:
+            msg = f"dropping tables with prefix {prefix!r} failed"
+            raise _as_package_error(exc, DatabaseError, msg) from exc
+        fields[VERDICT_KEY] = verdict
+        fields["tables"] = len(dropped)
+        return DropTablesResult(dropped, verdict)
+
+
 def check_load(
     connection: Connection,
     credentials: CredentialSource,
     *,
     source: str | os.PathLike[str] | None = None,
     replace: str | None = None,
+    prune_prefix: str | None = None,
     identities: Sequence[str] | None = None,
     passphrase: str | None = None,
     options: Sequence[str] = (),
     allow_unsandboxed: bool = False,
 ) -> Verdict:
     """What :func:`load` would find. The source header is read only for a path."""
+    if prune_prefix is not None:
+        validate_table_prefix(prune_prefix)
     with operation("check_load", connection) as fields, ExitStack() as cleanup:
         if source is not None and not isinstance(source, (str, os.PathLike)):
             # Reading a stream's head here would leave load() a dump without its head.
@@ -932,6 +1085,7 @@ def load(
     source: IO[bytes] | Iterable[bytes] | str | os.PathLike[str],
     *,
     replace: str | None = None,
+    prune_prefix: str | None = None,
     identities: Sequence[str] | None = None,
     passphrase: str | None = None,
     options: Sequence[str] = (),
@@ -939,9 +1093,14 @@ def load(
 ) -> TransferResult:
     """Load a dump into this database.
 
-    Damage in a source is found mid-stream, after earlier statements ran, so load
-    into a staging database and switch to it only after the load is checked.
+    When ``prune_prefix`` is set, every base table and view whose name starts
+    with that prefix is dropped first (same rules as :func:`drop_tables`); their
+    names are reported on :attr:`TransferResult.dropped`. Damage in a source is
+    found mid-stream after earlier statements ran — take a safety dump first if
+    the target must be recoverable.
     """
+    if prune_prefix is not None:
+        prune_prefix = validate_table_prefix(prune_prefix)
     started = time.monotonic()
     with operation("load", connection) as fields, ExitStack() as cleanup:
         header, head, reader, decrypting = _prepare(
@@ -963,6 +1122,17 @@ def load(
             or plan.credentials is None
         ):
             raise RefusedError(plan.verdict)
+        dropped: tuple[str, ...] = ()
+        if prune_prefix is not None:
+            try:
+                session = open_connection(connection, plan.credentials, database=None)
+                with session, session.cursor() as cur:
+                    dropped = _drop_prefix_objects(cur, connection.database, prune_prefix)
+                    session.commit()
+            except pymysql.err.MySQLError as exc:
+                msg = f"pruning tables with prefix {prune_prefix!r} before load failed"
+                raise _as_package_error(exc, DatabaseError, msg) from exc
+            fields["dropped"] = len(dropped)
         if header.sandboxed and not plan.tool.understands_sandbox_line:
             head = head.split(b"\n", 1)[1] if b"\n" in head else b""
         try:
@@ -991,4 +1161,5 @@ def load(
             plan.tool.label,
             plan.server,
             plan.verdict,
+            dropped,
         )

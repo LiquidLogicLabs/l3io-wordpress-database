@@ -29,12 +29,16 @@ def test_every_exported_name_exists() -> None:
 def test_transfer_surface_is_exported() -> None:
     names = {
         "TransferResult",
+        "DropTablesResult",
         "DumpStream",
         "check_dump",
+        "check_drop_tables",
+        "drop_tables",
         "iter_dump",
         "dump",
         "check_load",
         "load",
+        "validate_table_prefix",
         "TransferError",
         "DecryptionError",
         "CorruptDumpError",

@@ -49,7 +49,7 @@ from .provision import (
     revoke,
     rotate_password,
 )
-from .transfer import check_dump, check_load, dump, load
+from .transfer import check_drop_tables, check_dump, check_load, drop_tables, dump, load
 from .verdict import Code, Verdict
 
 
@@ -65,12 +65,29 @@ class Exit(IntEnum):
     NOT_READY = 7
 
 
-_NEEDS_WP = {"inspect", "schema-version", "ensure", "rotate-password", "dump", "load"}
+_NEEDS_WP = {
+    "inspect",
+    "schema-version",
+    "ensure",
+    "rotate-password",
+    "dump",
+    "load",
+    "drop-tables",
+}
 _NEEDS_ADMIN = {"survey", "ensure", "rotate-password", "revoke", "drop-user", "drop-database"}
 _NAMED_USER = {"revoke", "drop-user"}
 _CONFIRM = {"revoke", "drop-user", "drop-database"}
-_CHECKABLE = ["ensure", "rotate-password", "revoke", "drop-user", "drop-database", "dump", "load"]
-_TRANSFER = {"dump", "load"}
+_CHECKABLE = [
+    "ensure",
+    "rotate-password",
+    "revoke",
+    "drop-user",
+    "drop-database",
+    "dump",
+    "load",
+    "drop-tables",
+]
+_TRANSFER = {"dump", "load", "drop-tables"}
 
 
 def _add_operation_options(
@@ -157,6 +174,11 @@ def _add_operation_options(
             "--replace", metavar="NAME", help="repeat the target's name to load over its tables"
         )
         p.add_argument(
+            "--prune-prefix",
+            metavar="PREFIX",
+            help="drop base tables and views with this name prefix before loading",
+        )
+        p.add_argument(
             "--allow-unsandboxed",
             action="store_true",
             help="strip MariaDB's sandbox line for an older client",
@@ -167,6 +189,12 @@ def _add_operation_options(
             default=[],
             help="extra client option (allow-listed, repeatable); join it with '=': "
             "--option=--binary-mode",
+        )
+    if operation == "drop-tables":
+        p.add_argument(
+            "--prefix",
+            required=True,
+            help="drop base tables and views whose names start with this prefix",
         )
 
 
@@ -358,14 +386,19 @@ def _run(args: argparse.Namespace) -> int:
                 _wordpress(args, config),
                 source=None if args.input == "-" else args.input,
                 replace=args.replace,
+                prune_prefix=args.prune_prefix,
                 identities=_identities(args) or None,
                 passphrase=_passphrase(args),
                 options=args.option,
                 allow_unsandboxed=args.allow_unsandboxed,
             ),
+            "drop-tables": lambda: check_drop_tables(
+                connection, _wordpress(args, config), prefix=args.prefix
+            ),
         }
-        verdict = checks[operation]()
-        _emit(verdict)
+        result = checks[operation]()
+        verdict = result.verdict if operation == "drop-tables" else result
+        _emit(result)
         return Exit.OK if verdict.ok else _refusal_exit(verdict)
 
     if operation == "inspect":
@@ -447,12 +480,16 @@ def _run(args: argparse.Namespace) -> int:
                 _wordpress(args, config),
                 source,
                 replace=args.replace,
+                prune_prefix=args.prune_prefix,
                 identities=identities,
                 passphrase=passphrase,
                 options=args.option,
                 allow_unsandboxed=args.allow_unsandboxed,
             )
         )
+        return Exit.OK
+    if operation == "drop-tables":
+        _emit(drop_tables(connection, _wordpress(args, config), prefix=args.prefix))
         return Exit.OK
     _emit(drop_database(connection, _admin(args), confirm=args.confirm))
     return Exit.OK

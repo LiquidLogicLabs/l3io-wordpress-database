@@ -20,9 +20,23 @@ import pytest
 
 from l3io.wp.database import Connection, Explicit, _client, ensure
 from l3io.wp.database.credentials import ResolvedCredentials
-from l3io.wp.database.errors import CorruptDumpError, DecryptionError, RefusedError, TransferError
+from l3io.wp.database.errors import (
+    CorruptDumpError,
+    DecryptionError,
+    InvalidArgumentsError,
+    RefusedError,
+    TransferError,
+)
 from l3io.wp.database.server import ServerFamily
-from l3io.wp.database.transfer import check_dump, check_load, dump, iter_dump, load
+from l3io.wp.database.transfer import (
+    check_drop_tables,
+    check_dump,
+    check_load,
+    drop_tables,
+    dump,
+    iter_dump,
+    load,
+)
 from l3io.wp.database.verdict import Code
 
 pytestmark = [
@@ -300,3 +314,59 @@ def test_a_dump_killed_mid_stream_raises(names: tuple[str, str]) -> None:
     os.kill(stream.pid, 9)
     with pytest.raises(TransferError):
         list(stream)
+
+
+def test_drop_tables_removes_prefix_objects_only(names: tuple[str, str]) -> None:
+    source, _ = names
+    sql(
+        f"CREATE TABLE `{source}`.`wp_posts` (id INT PRIMARY KEY)",  # noqa: S608
+        f"CREATE VIEW `{source}`.`wp_v` AS SELECT option_id FROM `{source}`.`wp_options`",  # noqa: S608
+        f"CREATE TABLE `{source}`.`other_app` (id INT PRIMARY KEY)",  # noqa: S608
+        f"CREATE TABLE `{source}`.`wpXshadow` (id INT PRIMARY KEY)",  # noqa: S608
+    )
+    planned = check_drop_tables(site(source), ROOT, prefix="wp_")
+    assert planned.verdict.ok
+    assert set(planned.tables) == {"wp_options", "wp_posts", "wp_v"}
+    result = drop_tables(site(source), ROOT, prefix="wp_")
+    assert set(result.tables) == {"wp_options", "wp_posts", "wp_v"}
+    remaining = {
+        row[0]
+        for row in sql(
+            "SELECT TABLE_NAME FROM information_schema.TABLES "  # noqa: S608
+            f"WHERE TABLE_SCHEMA = '{source}'"
+        )
+    }
+    assert remaining == {"other_app", "wpXshadow"}
+
+
+def test_load_prune_prefix_drops_then_loads(names: tuple[str, str]) -> None:
+    source, target = names
+    data = io.BytesIO()
+    dump(site(source), ROOT, data)
+    sql(
+        f"CREATE TABLE `{target}`.`wp_options` (option_id INT PRIMARY KEY, "
+        "option_name VARCHAR(191), option_value LONGBLOB, note VARCHAR(50))",
+        f"INSERT INTO `{target}`.`wp_options` VALUES (9, 'stale', NULL, NULL)",  # noqa: S608
+        f"CREATE TABLE `{target}`.`wp_leftover` (id INT PRIMARY KEY)",  # noqa: S608
+        f"CREATE TABLE `{target}`.`other_app` (id INT PRIMARY KEY)",  # noqa: S608
+    )
+    with pytest.raises(InvalidArgumentsError):
+        check_load(site(target), ROOT, prune_prefix="")
+    result = load(
+        site(target),
+        ROOT,
+        io.BytesIO(data.getvalue()),
+        replace=target,
+        prune_prefix="wp_",
+    )
+    assert set(result.dropped) == {"wp_options", "wp_leftover"}
+    assert checksum(target) == checksum(source)
+    remaining = {
+        row[0]
+        for row in sql(
+            "SELECT TABLE_NAME FROM information_schema.TABLES "  # noqa: S608
+            f"WHERE TABLE_SCHEMA = '{target}'"
+        )
+    }
+    assert "other_app" in remaining
+    assert "wp_leftover" not in remaining

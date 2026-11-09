@@ -85,13 +85,17 @@ from .tls import (
     tls_required_unless_local,
 )
 from .transfer import (
+    DropTablesResult,
     DumpStream,
     TransferResult,
+    check_drop_tables,
     check_dump,
     check_load,
+    drop_tables,
     dump,
     iter_dump,
     load,
+    validate_table_prefix,
 )
 from .verdict import Code, Finding, Severity, Verdict
 from .versions import SUPPORTED_FROM, SchemaVersion, release_for
@@ -121,6 +125,7 @@ __all__ = [
     "DatabaseError",
     "DatabaseUnreachableError",
     "DecryptionError",
+    "DropTablesResult",
     "DumpStream",
     "EnsureResult",
     "Environment",
@@ -153,6 +158,7 @@ __all__ = [
     "WpConfigFile",
     "__version__",
     "check_drop_database",
+    "check_drop_tables",
     "check_drop_user",
     "check_dump",
     "check_ensure",
@@ -163,6 +169,7 @@ __all__ = [
     "check_rotate_password",
     "decrypt",
     "drop_database",
+    "drop_tables",
     "drop_user",
     "dump",
     "encrypt",
@@ -180,5 +187,6 @@ __all__ = [
     "survey",
     "tls_required_unless_local",
     "validate_database_name",
+    "validate_table_prefix",
     "validate_user_name",
 ]
