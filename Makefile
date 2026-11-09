@@ -70,8 +70,9 @@ test-db: ## Integration tests against a server; set DB_HOST first
 # legs anyway, which collides on a fixed 33398. Defaults match ci.yml
 # L3IO_ACT_HOST_PORTS when a caller forces TEST_PORT/TRANSFER_PORT.
 TEST_PORT ?=
-TRANSFER_PORT ?= 33399
+TRANSFER_PORT ?=
 TEST_ENGINE_LOCK := /tmp/l3io-wordpress-database-test-engine.lock
+TEST_TRANSFER_LOCK := /tmp/l3io-wordpress-database-test-transfer.lock
 # Prebuilt abi3 wheel for l3io-age-passphrase (server images have no C compiler).
 BINDER_WHEEL_DIR ?= $(CURDIR)/.cache/age-passphrase-wheels
 BINDER_VERSION ?= 0.1.1
@@ -80,53 +81,14 @@ BINDER_WHEEL_URL ?= https://github.com/LiquidLogicLabs/l3io-age-passphrase/relea
 
 test-engine: ## Full pytest against ENGINE server image (CI test job; act-safe)
 	@test -n "$(ENGINE)" || { echo "set ENGINE, e.g. make test-engine ENGINE=mysql:8.0"; exit 1; }
-	@set -eu; \
-	flock "$(TEST_ENGINE_LOCK)" bash -c ' \
-	set -eu; \
-	port="$(TEST_PORT)"; \
-	if [ -z "$$port" ]; then \
-	  port=$$(python3 -c "import socket; s=socket.socket(); s.bind((\"127.0.0.1\",0)); print(s.getsockname()[1]); s.close()"); \
-	fi; \
-	name="l3io-test-$$$$"; \
-	docker run -d --rm --name "$$name" -e MYSQL_ROOT_PASSWORD=root -e MARIADB_ROOT_PASSWORD=root \
-	  -p 127.0.0.1:$$port:3306 "$(ENGINE)" >/dev/null; \
-	trap "docker rm -f \"$$name\" >/dev/null 2>&1" EXIT; \
-	trap "exit 130" INT TERM; \
-	export DB_HOST=127.0.0.1 DB_PORT=$$port DB_ADMIN_USER=root DB_ADMIN_PASSWORD=root; \
-	for _ in $$(seq 1 90); do \
-	  if $(UV) run --no-sync python -c "import os, pymysql; pymysql.connect(host=os.environ[\"DB_HOST\"], port=int(os.environ[\"DB_PORT\"]), user=\"root\", password=\"root\").close()" 2>/dev/null; then \
-	    break; \
-	  fi; \
-	  sleep 2; \
-	done; \
-	$(UV) run --no-sync python -c "import os, pymysql; pymysql.connect(host=os.environ[\"DB_HOST\"], port=int(os.environ[\"DB_PORT\"]), user=\"root\", password=\"root\").close()" >/dev/null; \
-	$(UV) run --no-sync pytest -q \
-	  --cov=l3io.wp.database --cov-report=term-missing \
-	  --cov-report=xml:$${COVERAGE_XML:-/tmp/l3io-coverage.xml} \
-	'
+	@flock "$(TEST_ENGINE_LOCK)" env ENGINE="$(ENGINE)" UV="$(UV)" TEST_PORT="$(TEST_PORT)" \
+		COVERAGE_XML="$(COVERAGE_XML)" bash tools/test-engine.sh
 
 test-transfer: ## Export/import tests against ENGINE (a server image) using its own client tools
 	@test -n "$(ENGINE)" || { echo "set ENGINE, e.g. make test-transfer ENGINE=mysql:8.4"; exit 1; }
-	@set -eu; \
-	mkdir -p "$(BINDER_WHEEL_DIR)"; \
-	wheel=$$(ls "$(BINDER_WHEEL_DIR)"/l3io_age_passphrase-$(BINDER_VERSION)-*.whl 2>/dev/null | head -1 || true); \
-	if [ -z "$$wheel" ]; then \
-	  echo "fetching l3io-age-passphrase $(BINDER_VERSION) wheel for transfer container"; \
-	  curl -fsSL -o "$(BINDER_WHEEL_DIR)/$$(basename "$(BINDER_WHEEL_URL)")" "$(BINDER_WHEEL_URL)"; \
-	  wheel=$$(ls "$(BINDER_WHEEL_DIR)"/l3io_age_passphrase-$(BINDER_VERSION)-*.whl | head -1); \
-	fi; \
-	base=$$(basename "$$wheel"); \
-	name="l3io-transfer-$$$$"; \
-	docker run -d --rm --name "$$name" -e MYSQL_ROOT_PASSWORD=root -e MARIADB_ROOT_PASSWORD=root \
-	  -p 127.0.0.1:$(TRANSFER_PORT):3306 "$(ENGINE)" >/dev/null; \
-	trap 'docker rm -f "'"$$name"'" "'"$$name"'-tests" >/dev/null 2>&1' EXIT; \
-	trap 'exit 130' INT TERM; \
-	docker run --rm --name "$$name-tests" --network host -v "$(CURDIR)":/repo:ro \
-	  -v "$$wheel:/wheels/$$base:ro" -e L3IO_AGE_PASSPHRASE_WHEEL=/wheels/$$base \
-	  -e L3IO_ENGINE="$(ENGINE)" -e L3IO_TRANSFER_CONTAINER=1 \
-	  -e DB_HOST=127.0.0.1 -e DB_PORT=$(TRANSFER_PORT) -e DB_ADMIN_USER=root -e DB_ADMIN_PASSWORD=root \
-	  --entrypoint bash "$(ENGINE)" /repo/tools/transfer-tests.sh & \
-	wait $$!
+	@flock "$(TEST_TRANSFER_LOCK)" env ENGINE="$(ENGINE)" UV="$(UV)" TRANSFER_PORT="$(TRANSFER_PORT)" \
+		CURDIR="$(CURDIR)" BINDER_WHEEL_DIR="$(BINDER_WHEEL_DIR)" BINDER_VERSION="$(BINDER_VERSION)" \
+		BINDER_WHEEL_URL="$(BINDER_WHEEL_URL)" bash tools/test-transfer.sh
 
 contracts: ## Architecture contracts (AD-27, AD-28)
 	$(UV) run pytest -q tests/test_architecture.py tests/test_identifiers.py
