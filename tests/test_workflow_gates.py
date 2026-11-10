@@ -131,3 +131,54 @@ def test_an_index_upload_runs_only_on_a_release_tag() -> None:
     assert uploads, "publish.yml uploads to no index -- this check is vacuous"
     ungated = [n for n in uploads if "startsWith(github.ref, 'refs/tags/v')" not in jobs[n]["if"]]
     assert not ungated, f"{ungated} can upload from a branch ref"
+
+
+def pypi_org_uploads_with_credentials(workflows: Path) -> list[str]:
+    """pypa uploads to pypi.org that pass ``user`` or ``password`` (disables OIDC).
+
+    TestPyPI may still use a token until a trusted publisher is registered there.
+    """
+    bad: list[str] = []
+    for workflow in sorted([*workflows.glob("*.yml"), *workflows.glob("*.yaml")]):
+        document = _load(workflow)
+        for job_id, job in (document.get("jobs") or {}).items():
+            for step in (job or {}).get("steps") or []:
+                if not str(step.get("uses", "")).startswith("pypa/gh-action-pypi-publish"):
+                    continue
+                with_ = step.get("with") or {}
+                target = str(with_.get("repository-url", ""))
+                if "test.pypi.org" in target:
+                    continue
+                for key in ("user", "password"):
+                    if key in with_:
+                        bad.append(f"{workflow.name}:{job_id} passes {key}= to pypi.org")
+    return bad
+
+
+def test_pypi_org_upload_uses_trusted_publishing() -> None:
+    assert pypi_org_uploads_with_credentials(WORKFLOWS) == []
+
+
+def test_a_pypi_org_token_is_caught(tmp_path: Path) -> None:
+    (tmp_path / "token.yml").write_text(
+        "on: push\njobs:\n  up:\n    steps:\n"
+        "      - uses: pypa/gh-action-pypi-publish@release/v1\n"
+        "        with:\n"
+        "          password: ${{ secrets.PYPI_TOKEN }}\n",
+        encoding="utf-8",
+    )
+    assert pypi_org_uploads_with_credentials(tmp_path) == [
+        "token.yml:up passes password= to pypi.org"
+    ]
+
+
+def test_a_testpypi_token_is_allowed(tmp_path: Path) -> None:
+    (tmp_path / "test.yml").write_text(
+        "on: push\njobs:\n  up:\n    steps:\n"
+        "      - uses: pypa/gh-action-pypi-publish@release/v1\n"
+        "        with:\n"
+        "          repository-url: https://test.pypi.org/legacy/\n"
+        "          password: ${{ secrets.PYPI_TEST_TOKEN }}\n",
+        encoding="utf-8",
+    )
+    assert pypi_org_uploads_with_credentials(tmp_path) == []
