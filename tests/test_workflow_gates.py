@@ -259,6 +259,7 @@ def _publish_release_job(doc: dict[str, Any]) -> list[dict[str, Any]]:
     assert isinstance(steps, list)
     return steps
 
+
 def _release_creator(doc: dict[str, Any]) -> dict[str, Any]:
     return next(s for s in _publish_release_job(doc) if _creates_a_release(s))
 
