@@ -255,8 +255,9 @@ def _release_findings(doc: dict[str, Any]) -> list[str]:
 
 
 def _publish_release_job(doc: dict[str, Any]) -> list[dict[str, Any]]:
-    return doc["jobs"]["release"]["steps"]
-
+    steps = doc["jobs"]["release"]["steps"]
+    assert isinstance(steps, list)
+    return steps
 
 def _release_creator(doc: dict[str, Any]) -> dict[str, Any]:
     return next(s for s in _publish_release_job(doc) if _creates_a_release(s))
