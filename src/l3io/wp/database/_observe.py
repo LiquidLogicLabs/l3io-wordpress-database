@@ -136,11 +136,14 @@ def _complete(
     # must never raise here, because this runs inside the exception handlers.
     # The event name is structlog's first positional parameter, so it travels as a
     # keyword too; otherwise a caller field named "event" collides with it.
+    # Event names are stable snake_case tokens so consumers can group and alert
+    # on them; free-text prose belongs in ``message`` (Finding.message, etc.).
     verdict = fields.pop(VERDICT_KEY, None)
     if isinstance(verdict, Verdict):
         for finding in verdict.warnings:
             _log.warning(
-                event=finding.message,
+                event=str(finding.code),
+                message=finding.message,
                 code=str(finding.code),
                 operation=name,
                 database=connection.database,
@@ -148,7 +151,7 @@ def _complete(
     caller_fields = {k: v for k, v in fields.items() if k not in _STRUCTLOG_PARAMETERS}
     event: dict[str, object] = {
         **caller_fields,
-        "event": "operation complete",
+        "event": "operation_completed",
         "operation": name,
         "outcome": outcome,
         "duration_ms": round((time.monotonic() - started) * 1000, 1),

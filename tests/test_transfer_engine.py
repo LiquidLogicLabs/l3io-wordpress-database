@@ -305,7 +305,7 @@ def test_an_unusable_recipient_fails_instead_of_hanging(
 
 
 def _completions(logs: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    return [e for e in logs if e.get("event") == "operation complete"]
+    return [e for e in logs if e.get("event") == "operation_completed"]
 
 
 def test_a_dump_operation_ends_when_its_stream_does(

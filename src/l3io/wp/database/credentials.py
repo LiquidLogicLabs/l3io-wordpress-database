@@ -138,7 +138,7 @@ class AwsSecretsManager:
         if not region:
             raise RegionNotKnownError
 
-        _log.debug("resolving secret", source=self.source, region=region)
+        _log.debug("resolving_secret", source=self.source, region=region)
         try:
             client = boto3.client("secretsmanager", region_name=region)
             payload: Any = client.get_secret_value(SecretId=self.secret_id)["SecretString"]

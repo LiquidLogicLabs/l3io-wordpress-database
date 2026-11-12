@@ -44,7 +44,7 @@ def test_bound_run_id_appears_on_the_completion_event(logs: LogCapture) -> None:
     structlog.contextvars.bind_contextvars(run_id="run-123")
     with operation("survey", CONN):
         pass
-    [event] = [e for e in logs.entries if e["event"] == "operation complete"]
+    [event] = [e for e in logs.entries if e["event"] == "operation_completed"]
     assert event["run_id"] == "run-123"
     assert event["operation"] == "survey"
     assert event["outcome"] == "succeeded"
@@ -103,7 +103,7 @@ def test_span_nests_under_the_callers_span() -> None:
 
 # Expected logged value per reserved key; None means "any float" (duration_ms).
 _RESERVED_VALUES: dict[str, str | None] = {
-    "event": "operation complete",
+    "event": "operation_completed",
     "operation": "drop_database",
     "outcome": "refused",
     "duration_ms": None,
@@ -147,10 +147,10 @@ def test_each_warning_is_logged_once_at_warning_level(logs: LogCapture) -> None:
     with operation("check_drop_database", CONN) as fields:
         fields["_verdict"] = verdict
     warnings = [e for e in logs.entries if e["log_level"] == "warning"]
-    assert [(w["code"], w["operation"]) for w in warnings] == [
-        ("live_wordpress_site", "check_drop_database")
+    assert [(w["event"], w["code"], w["message"], w["operation"]) for w in warnings] == [
+        ("live_wordpress_site", "live_wordpress_site", "looks live", "check_drop_database")
     ]
-    [done] = [e for e in logs.entries if e["event"] == "operation complete"]
+    [done] = [e for e in logs.entries if e["event"] == "operation_completed"]
     assert "_verdict" not in done
 
 
