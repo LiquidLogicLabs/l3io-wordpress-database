@@ -400,8 +400,8 @@ wheels = [
 
 [[package]]
 name = "l3io-age-passphrase"
-version = "0.1.1"
-source = { git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.1#4322c4ba466ed06a3fb1905f1fbae5dba2d79f62" }
+version = "0.1.3"
+source = { git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.3#1348206412eb4981119a3b124c15adc0836b45a4" }
 
 [[package]]
 name = "l3io-wordpress-config"
@@ -449,7 +449,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 'aws'", specifier = ">=1.34,<2" },
-    { name = "l3io-age-passphrase", marker = "extra == 'encryption'", git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.1" },
+    { name = "l3io-age-passphrase", marker = "extra == 'encryption'", git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.3" },
     { name = "l3io-wordpress-config", marker = "extra == 'wpconfig'", git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git?tag=v0.1.3" },
     { name = "opentelemetry-api", specifier = ">=1.30,<2" },
     { name = "pymysql", extras = ["rsa"], specifier = ">=1.2,<2" },
@@ -461,7 +461,7 @@ provides-extras = ["aws", "encryption", "wpconfig"]
 [package.metadata.requires-dev]
 dev = [
     { name = "boto3", specifier = ">=1.34,<2" },
-    { name = "l3io-age-passphrase", git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.1" },
+    { name = "l3io-age-passphrase", git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git?tag=v0.1.3" },
     { name = "l3io-wordpress-config", git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git?tag=v0.1.3" },
     { name = "mypy", specifier = "==2.3.1" },
     { name = "opentelemetry-sdk", specifier = "==1.45.1" },

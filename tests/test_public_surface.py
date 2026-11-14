@@ -41,6 +41,7 @@ def test_transfer_surface_is_exported() -> None:
         "validate_table_prefix",
         "TransferError",
         "DecryptionError",
+        "WorkFactorTooHighError",
         "CorruptDumpError",
         "ClientTool",
         "generate_identity",

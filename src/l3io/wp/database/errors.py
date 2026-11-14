@@ -182,5 +182,14 @@ class DecryptionError(DatabaseError):
     """None of the supplied identities or the passphrase can decrypt the source."""
 
 
+class WorkFactorTooHighError(DatabaseError):
+    """The Archive's scrypt work factor exceeds this machine's decrypt limit.
+
+    Distinct from :class:`CorruptDumpError`: the payload is intact, but this
+    host refuses the work (e.g. binder ``Excessive work parameter``). Never
+    names the passphrase.
+    """
+
+
 class CorruptDumpError(DatabaseError):
     """An encrypted source is truncated, damaged, or not an age file."""

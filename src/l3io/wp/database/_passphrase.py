@@ -18,7 +18,13 @@ import subprocess
 import threading
 from typing import IO, Any, Literal
 
-from .errors import CorruptDumpError, DecryptionError, InvalidArgumentsError, MissingDependencyError
+from .errors import (
+    CorruptDumpError,
+    DecryptionError,
+    InvalidArgumentsError,
+    MissingDependencyError,
+    WorkFactorTooHighError,
+)
 
 BackendName = Literal["binder", "cli"]
 _ENV = "L3IO_AGE_PASSPHRASE_BACKEND"
@@ -121,6 +127,9 @@ def _binder_decrypt(reader: IO[bytes], writer: IO[bytes], passphrase: str) -> No
         if text == "Decryption failed":
             msg = "the passphrase cannot decrypt this dump"
             raise DecryptionError(msg) from exc
+        if "Excessive work parameter" in text:
+            msg = "the Archive's scrypt work factor exceeds this machine's limit"
+            raise WorkFactorTooHighError(msg) from exc
         msg = "the encrypted dump is damaged or not an age file"
         raise CorruptDumpError(msg) from exc
     except OSError as exc:
@@ -223,6 +232,9 @@ def _map_cli_failure(*, encrypt: bool, err: str, code: int) -> None:
         if "no identity matched" in lower or "incorrect" in lower or "wrong" in lower:
             msg = "the passphrase cannot decrypt this dump"
             raise DecryptionError(msg)
+        if "excessive work" in lower:
+            msg = "the Archive's scrypt work factor exceeds this machine's limit"
+            raise WorkFactorTooHighError(msg)
         if "failed to read header" in lower or "not an age" in lower or "parsing" in lower:
             msg = "the encrypted dump is damaged or not an age file"
             raise CorruptDumpError(msg)

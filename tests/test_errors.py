@@ -47,3 +47,5 @@ def test_transfer_error_carries_verdict_exit_code_and_stderr() -> None:
 def test_decryption_and_corruption_are_distinct() -> None:
     assert not issubclass(errors.DecryptionError, errors.CorruptDumpError)
     assert not issubclass(errors.CorruptDumpError, errors.DecryptionError)
+    assert not issubclass(errors.WorkFactorTooHighError, errors.CorruptDumpError)
+    assert not issubclass(errors.WorkFactorTooHighError, errors.DecryptionError)

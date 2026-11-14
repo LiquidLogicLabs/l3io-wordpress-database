@@ -22,8 +22,8 @@ binder_wheel=${AGE_PASSPHRASE_WHEEL:-}
 if [ -z "$binder_wheel" ]; then
   # mkdir before realpath: realpath fails when the path does not exist yet
   # (CI runners have no .cache/; .gitignore excludes it).
-  # Keep in lockstep with pyproject encryption pin (>=0.1.1,<0.2).
-  ver=${BINDER_VERSION:-0.1.1}
+  # Keep in lockstep with pyproject encryption pin (>=0.1.3,<0.2).
+  ver=${BINDER_VERSION:-0.1.3}
   # 0.1.1+ uses manylinux2014_*.manylinux_2_17_* order; 0.1.0 used the reverse.
   cache_dir="$(dirname "$0")/../.cache/age-passphrase-wheels"
   mkdir -p "$cache_dir"

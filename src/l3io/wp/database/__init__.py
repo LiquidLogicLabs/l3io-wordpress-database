@@ -53,6 +53,7 @@ from .errors import (
     TlsHandshakeError,
     TlsVerificationError,
     TransferError,
+    WorkFactorTooHighError,
 )
 from .facade import Database
 from .identifiers import (
@@ -155,6 +156,7 @@ __all__ = [
     "TransferError",
     "TransferResult",
     "Verdict",
+    "WorkFactorTooHighError",
     "WpConfigFile",
     "__version__",
     "check_drop_database",

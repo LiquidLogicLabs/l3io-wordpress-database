@@ -52,7 +52,7 @@ passphrase automation via `age-plugin-batchpass` and `AGE_PASSPHRASE_FD`.
    tarball (which ships the plugin).
 
 The `encryption` extra depends on `pyrage>=1.4,<2` and
-`l3io-age-passphrase>=0.1,<0.2`. A wrong identity or passphrase raises
+`l3io-age-passphrase>=0.1.3,<0.2`. A wrong identity or passphrase raises
 `DecryptionError`; a truncated or damaged stream raises `CorruptDumpError`.
 Passphrases never appear in exception messages, logs, or spans. The CLI takes
 `--passphrase-file` or `--ask-passphrase`, never `--passphrase SECRET`.

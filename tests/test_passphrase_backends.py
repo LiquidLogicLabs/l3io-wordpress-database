@@ -19,6 +19,7 @@ from l3io.wp.database.errors import (
     DecryptionError,
     InvalidArgumentsError,
     MissingDependencyError,
+    WorkFactorTooHighError,
 )
 
 PLAIN = b"backend-probe\n" * 200
@@ -399,6 +400,60 @@ def test_binder_decrypt_maps_non_passphrase_decrypt_error(
     monkeypatch.setattr(_passphrase, "_binder", lambda: _Mod)
     with pytest.raises(CorruptDumpError, match="damaged"):
         _passphrase.decrypt_io(io.BytesIO(b"x"), io.BytesIO(), PASSPHRASE)
+
+
+def test_binder_decrypt_maps_excessive_work_parameter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import l3io_age_passphrase as binder
+
+    class _Mod:
+        DecryptError = binder.DecryptError
+
+        @staticmethod
+        def decrypt_io(*_a: Any, **_k: Any) -> None:
+            msg = (
+                "Excessive work parameter for passphrase. Decryption would take around 128 seconds."
+            )
+            raise binder.DecryptError(msg)
+
+    monkeypatch.setenv("L3IO_AGE_PASSPHRASE_BACKEND", "binder")
+    monkeypatch.setattr(_passphrase, "_binder", lambda: _Mod)
+    with pytest.raises(WorkFactorTooHighError, match="work factor exceeds") as info:
+        _passphrase.decrypt_io(io.BytesIO(b"x"), io.BytesIO(), PASSPHRASE)
+    assert not isinstance(info.value, CorruptDumpError)
+    assert not isinstance(info.value, DecryptionError)
+    assert PASSPHRASE not in str(info.value)
+
+
+def test_binder_decrypt_refuses_forged_work_factor_23() -> None:
+    """A stanza asking for log_n 23 is intact but above the decrypt limit."""
+    import re
+
+    out = io.BytesIO()
+    encryption.encrypt(io.BytesIO(PLAIN), out, passphrase=PASSPHRASE)
+    sealed_bytes = out.getvalue()
+    match = re.search(rb"^-> scrypt \S+ (\d+)$", sealed_bytes, re.MULTILINE)
+    assert match is not None
+    forged = sealed_bytes.replace(
+        f" {int(match.group(1))}\n".encode(),
+        b" 23\n",
+        1,
+    )
+    with pytest.raises(WorkFactorTooHighError, match="work factor exceeds"):
+        encryption.decrypt(io.BytesIO(forged), io.BytesIO(), passphrase=PASSPHRASE)
+    # Truncated body remains CorruptDumpError, not work-factor.
+    with pytest.raises(CorruptDumpError):
+        encryption.decrypt(io.BytesIO(sealed_bytes[:40]), io.BytesIO(), passphrase=PASSPHRASE)
+
+
+def test_map_cli_failure_excessive_work() -> None:
+    with pytest.raises(WorkFactorTooHighError, match="work factor exceeds"):
+        _passphrase._map_cli_failure(
+            encrypt=False,
+            err="Excessive work parameter for passphrase",
+            code=1,
+        )
 
 
 def test_binder_decrypt_reraises_oserror_with_errno(monkeypatch: pytest.MonkeyPatch) -> None:

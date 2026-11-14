@@ -40,7 +40,7 @@ aws = ["boto3>=1.34,<2"]
 wpconfig = ["l3io-wordpress-config>=0.1.2,<0.2"]
 encryption = [
   "pyrage>=1.4,<2",
-  "l3io-age-passphrase>=0.1.1,<0.2",
+  "l3io-age-passphrase>=0.1.3,<0.2",
 ]
 
 # Mechanical enforcement of the family's uv version, matching l3io-wordpress-config.
@@ -58,7 +58,7 @@ required-version = "==0.11.6"
 # build that carries a VCS dependency. Delete this block once public PyPI (or
 # a documented default index) carries both.
 l3io-wordpress-config = { git = "https://github.com/LiquidLogicLabs/l3io-wordpress-config.git", tag = "v0.1.3" }
-l3io-age-passphrase = { git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git", tag = "v0.1.1" }
+l3io-age-passphrase = { git = "https://github.com/LiquidLogicLabs/l3io-age-passphrase.git", tag = "v0.1.3" }
 
 [project.scripts]
 l3io-wordpress-database = "l3io.wp.database.cli:main"
@@ -86,7 +86,7 @@ dev = [
   "opentelemetry-sdk==1.45.1",
   # The encryption extra, also here because `uv run` prunes extras.
   "pyrage==1.4.0",
-  "l3io-age-passphrase>=0.1.1,<0.2",
+  "l3io-age-passphrase>=0.1.3,<0.2",
   # The optional extras are dev dependencies too, so a bare `uv run` can
   # exercise the code paths behind them. `uv run` syncs the default groups
   # only, which PRUNES extras -- without this, every `uv run` silently
