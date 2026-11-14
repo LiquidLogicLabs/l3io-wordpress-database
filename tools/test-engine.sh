@@ -12,7 +12,7 @@ fi
 name="l3io-test-$(python3 -c 'import uuid; print(uuid.uuid4().hex[:12])')"
 docker run -d --rm --name "$name" -e MYSQL_ROOT_PASSWORD=root -e MARIADB_ROOT_PASSWORD=root \
   -p "127.0.0.1:${port}:3306" "$ENGINE" >/dev/null
-trap 'docker rm -f "'"$name"'" >/dev/null 2>&1' EXIT
+trap 'docker rm -f -v "'"$name"'" >/dev/null 2>&1' EXIT
 trap 'exit 130' INT TERM
 export DB_HOST=127.0.0.1 DB_PORT="$port" DB_ADMIN_USER=root DB_ADMIN_PASSWORD=root
 for _ in $(seq 1 90); do

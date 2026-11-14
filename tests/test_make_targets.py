@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 MAKEFILE = REPO / "Makefile"
-TRANSFER_SH = REPO / "tools" / "test-transfer.sh"
-ENGINE_SH = REPO / "tools" / "test-engine.sh"
+TOOLS = REPO / "tools"
+TRANSFER_SH = TOOLS / "test-transfer.sh"
+ENGINE_SH = TOOLS / "test-engine.sh"
+
+# ``docker rm -f`` without ``-v`` pre-empts ``--rm`` and leaves the image's
+# anonymous VOLUME (MySQL/MariaDB: /var/lib/mysql) behind on every CI leg.
+_DOCKER_RM = re.compile(r"\bdocker\s+rm\b(?P<flags>(?:\s+-[^\s]+)*)")
+_RM_HAS_V = re.compile(r"(?:^|\s)-[^\s]*v|--volumes\b")
 
 
 def recipe(target: str) -> str:
@@ -49,3 +56,21 @@ def test_an_interrupted_transfer_run_removes_its_server() -> None:
 def test_test_engine_measures_coverage() -> None:
     assert "tools/test-engine.sh" in recipe("test-engine")
     assert "--cov=l3io.wp.database" in ENGINE_SH.read_text(encoding="utf-8")
+
+
+def test_docker_rm_in_tools_scripts_always_removes_volumes() -> None:
+    """Every ``docker rm`` in tools/ must pass ``-v`` (or ``--volumes``).
+
+    Globs ``tools/*.sh`` so a new helper is covered without editing this list.
+    """
+    offenders: list[str] = []
+    for path in sorted(TOOLS.glob("*.sh")):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            match = _DOCKER_RM.search(line)
+            if match is None:
+                continue
+            if _RM_HAS_V.search(match.group("flags")) is None:
+                offenders.append(f"{path.name}:{lineno}: {line.strip()}")
+    assert not offenders, "docker rm without -v leaves anonymous volumes behind:\n" + "\n".join(
+        offenders
+    )

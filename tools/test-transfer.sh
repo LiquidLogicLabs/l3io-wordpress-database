@@ -26,7 +26,7 @@ id=$(python3 -c 'import uuid; print(uuid.uuid4().hex[:12])')
 name="l3io-transfer-${id}"
 docker run -d --rm --name "$name" -e MYSQL_ROOT_PASSWORD=root -e MARIADB_ROOT_PASSWORD=root \
   -p "127.0.0.1:${port}:3306" "$ENGINE" >/dev/null
-trap 'docker rm -f "'"$name"'" "'"$name"'-tests" >/dev/null 2>&1' EXIT
+trap 'docker rm -f -v "'"$name"'" "'"$name"'-tests" >/dev/null 2>&1' EXIT
 trap 'exit 130' INT TERM
 docker run --rm --name "${name}-tests" --network host -v "${CURDIR}:/repo:ro" \
   -v "$wheel:/wheels/$base:ro" -e L3IO_AGE_PASSPHRASE_WHEEL=/wheels/$base \
